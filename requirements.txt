@@ -3,7 +3,8 @@ requests
 ruamel.yaml
 cachetools
 conda
-conda-package-handling<2
+conda-package-handling
+conda-smithy
 conda-build
 mamba>=0.23
 ruamel.yaml.jinja2
