@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
 
 __version__ = None
-with open("conda-forge-feedstock-check-solvable/_version.py") as fp:
-    __version__ = eval(fp.read().strip())
+with open("conda_forge_feedstock_check_solvable/_version.py") as fp:
+    exec(fp.read().strip())
 
 setup(
     name="conda-forge-feedstock-check-solvable",
