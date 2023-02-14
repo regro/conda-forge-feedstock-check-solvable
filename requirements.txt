@@ -1,0 +1,7 @@
+python-rapidjson
+requests
+ruamel.yaml
+conda
+conda-package-handling<2
+conda-build
+mamba>=0.23
