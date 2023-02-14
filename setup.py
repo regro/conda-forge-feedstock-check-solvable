@@ -14,5 +14,5 @@ setup(
     author="Conda-forge-tick Development Team",
     author_email="",
     url="https://github.com/regro/conda-forge-feedstock-check-solvable",
-    packages=find_packages(),
+    packages=find_packages(exclude=["tests"]),
 )
