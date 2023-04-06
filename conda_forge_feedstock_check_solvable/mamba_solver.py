@@ -258,6 +258,23 @@ def _strip_anaconda_tokens(url):
         return url
 
 
+def _download_libcfgraph_index():
+    global LIBCFGRAPH_INDEX
+    logger.warning("downloading libcfgraph file index")
+    r = requests.get(
+        "https://raw.githubusercontent.com/regro/libcfgraph"
+        "/master/.file_listing_meta.json",
+    )
+    n_files = r.json()["n_files"]
+    LIBCFGRAPH_INDEX = []
+    for i in range(n_files):
+        r = requests.get(
+            "https://raw.githubusercontent.com/regro/libcfgraph"
+            "/master/.file_listing_%d.json" % i,
+        )
+        LIBCFGRAPH_INDEX += r.json()
+
+
 @functools.lru_cache(maxsize=10240)
 def _get_run_export(link_tuple):
 
@@ -289,12 +306,7 @@ def _get_run_export(link_tuple):
         channel_subdir = "/".join(link_tuple[0].split("/")[-2:])
         libcfg_pth = f"artifacts/{name}/" f"{channel_subdir}/{pkg_nm}.json"
         if LIBCFGRAPH_INDEX is None:
-            logger.warning("downloading libcfgraph file index")
-            r = requests.get(
-                "https://raw.githubusercontent.com/regro/libcfgraph"
-                "/master/.file_listing.json",
-            )
-            LIBCFGRAPH_INDEX = r.json()
+            _download_libcfgraph_index()
 
         if libcfg_pth in LIBCFGRAPH_INDEX:
             data = requests.get(
