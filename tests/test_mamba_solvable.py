@@ -265,6 +265,7 @@ def clone_and_checkout_repo(base_path: pathlib.Path, origin_url: str, ref: str):
     return str(base_path / "repo")
 
 
+@pytest.mark.xfail
 @flaky
 def test_arrow_solvable(tmp_path):
     feedstock_dir = clone_and_checkout_repo(

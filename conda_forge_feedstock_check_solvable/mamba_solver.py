@@ -14,7 +14,6 @@ import os
 import logging
 import glob
 import functools
-import requests
 import pathlib
 import pprint
 import tempfile
@@ -40,6 +39,10 @@ from mamba.utils import load_channels
 from conda_build.conda_interface import pkgs_dirs
 from conda_build.utils import download_channeldata
 
+from conda_forge_metadata.artifact_info import (
+    get_artifact_info_as_json,
+)
+
 PACKAGE_CACHE = api.MultiPackageCache(pkgs_dirs)
 
 logger = logging.getLogger("conda_forge_tick.mamba_solver")
@@ -49,8 +52,6 @@ DEFAULT_RUN_EXPORTS = {
     "strong": set(),
     "noarch": set(),
 }
-LIBCFGRAPH_INDEX = None
-
 
 # turn off pip for python
 api.Context().add_pip_as_python_dependency = False
@@ -258,27 +259,8 @@ def _strip_anaconda_tokens(url):
         return url
 
 
-def _download_libcfgraph_index():
-    global LIBCFGRAPH_INDEX
-    logger.warning("downloading libcfgraph file index")
-    r = requests.get(
-        "https://raw.githubusercontent.com/regro/libcfgraph"
-        "/master/.file_listing_meta.json",
-    )
-    n_files = r.json()["n_files"]
-    LIBCFGRAPH_INDEX = []
-    for i in range(n_files):
-        r = requests.get(
-            "https://raw.githubusercontent.com/regro/libcfgraph"
-            "/master/.file_listing_%d.json" % i,
-        )
-        LIBCFGRAPH_INDEX += r.json()
-
-
 @functools.lru_cache(maxsize=10240)
 def _get_run_export(link_tuple):
-
-    global LIBCFGRAPH_INDEX
 
     run_exports = None
 
@@ -298,25 +280,13 @@ def _get_run_export(link_tuple):
     name = data["name"]
 
     if cd.get("packages", {}).get(name, {}).get("run_exports", {}):
-        # libcfgraph location
-        if link_tuple[1].endswith(".tar.bz2"):
-            pkg_nm = link_tuple[1][: -len(".tar.bz2")]
-        else:
-            pkg_nm = link_tuple[1][: -len(".conda")]
-        channel_subdir = "/".join(link_tuple[0].split("/")[-2:])
-        libcfg_pth = f"artifacts/{name}/" f"{channel_subdir}/{pkg_nm}.json"
-        if LIBCFGRAPH_INDEX is None:
-            _download_libcfgraph_index()
+        data = get_artifact_info_as_json(
+            link_tuple[0].split("/")[-2:][0],  # channel
+            link_tuple[0].split("/")[-2:][0],  # subdir
+            link_tuple[1],  # package
+        )
 
-        if libcfg_pth in LIBCFGRAPH_INDEX:
-            data = requests.get(
-                os.path.join(
-                    "https://raw.githubusercontent.com",
-                    "regro/libcfgraph/master",
-                    libcfg_pth,
-                ),
-            ).json()
-
+        if data is not None:
             rx = data.get("rendered_recipe", {}).get("build", {}).get("run_exports", {})
             if rx:
                 run_exports = copy.deepcopy(
