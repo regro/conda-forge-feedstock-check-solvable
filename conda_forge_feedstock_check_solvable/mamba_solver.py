@@ -282,7 +282,7 @@ def _get_run_export(link_tuple):
     if cd.get("packages", {}).get(name, {}).get("run_exports", {}):
         data = get_artifact_info_as_json(
             link_tuple[0].split("/")[-2:][0],  # channel
-            link_tuple[0].split("/")[-2:][0],  # subdir
+            link_tuple[0].split("/")[-2:][1],  # subdir
             link_tuple[1],  # package
         )
 

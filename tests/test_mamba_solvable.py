@@ -271,7 +271,7 @@ def test_arrow_solvable(tmp_path):
     feedstock_dir = clone_and_checkout_repo(
         tmp_path,
         "https://github.com/conda-forge/arrow-cpp-feedstock",
-        ref="master",
+        ref="main",
     )
     solvable, errors, solvable_by_variant = is_recipe_solvable(feedstock_dir)
     pprint.pprint(solvable_by_variant)
@@ -284,7 +284,7 @@ def test_guiqwt_solvable(tmp_path):
     feedstock_dir = clone_and_checkout_repo(
         tmp_path,
         "https://github.com/conda-forge/guiqwt-feedstock",
-        ref="master",
+        ref="main",
     )
     solvable, errors, solvable_by_variant = is_recipe_solvable(feedstock_dir)
     pprint.pprint(solvable_by_variant)
@@ -297,7 +297,7 @@ def test_datalad_solvable(tmp_path):
     feedstock_dir = clone_and_checkout_repo(
         tmp_path,
         "https://github.com/conda-forge/datalad-feedstock",
-        ref="master",
+        ref="main",
     )
     solvable, errors, solvable_by_variant = is_recipe_solvable(feedstock_dir)
     pprint.pprint(solvable_by_variant)
@@ -310,7 +310,7 @@ def test_grpcio_solvable(tmp_path):
     feedstock_dir = clone_and_checkout_repo(
         tmp_path,
         "https://github.com/conda-forge/grpcio-feedstock",
-        ref="master",
+        ref="main",
     )
     solvable, errors, solvable_by_variant = is_recipe_solvable(feedstock_dir)
     pprint.pprint(solvable_by_variant)
@@ -323,7 +323,7 @@ def test_cupy_solvable(tmp_path):
     feedstock_dir = clone_and_checkout_repo(
         tmp_path,
         "https://github.com/conda-forge/cupy-feedstock",
-        ref="master",
+        ref="main",
     )
     subprocess.run(
         f"cd {feedstock_dir} && git checkout 72d6c5808ca79c9cd9a3eb4064a72586c73c3430",
@@ -514,7 +514,7 @@ def test_arrow_solvable_timeout(tmp_path):
     feedstock_dir = clone_and_checkout_repo(
         tmp_path,
         "https://github.com/conda-forge/arrow-cpp-feedstock",
-        ref="master",
+        ref="main",
     )
     # let's run this over and over again to make sure nothing weird is happening
     # with the killed processes
@@ -534,7 +534,7 @@ def test_pillow_solvable(tmp_path):
     feedstock_dir = clone_and_checkout_repo(
         tmp_path,
         "https://github.com/conda-forge/pillow-feedstock",
-        ref="master",
+        ref="main",
     )
 
     subprocess.run(
