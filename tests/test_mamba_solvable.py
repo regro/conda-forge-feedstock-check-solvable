@@ -248,7 +248,7 @@ extra:
 def test_r_base_cross_solvable():
     feedstock_dir = os.path.join(os.path.dirname(__file__), "r-base-feedstock")
     solvable, errors, _ = is_recipe_solvable(feedstock_dir)
-    assert not solvable, pprint.pformat(errors)
+    assert solvable, pprint.pformat(errors)
 
     solvable, errors, _ = is_recipe_solvable(
         feedstock_dir,
@@ -265,7 +265,6 @@ def clone_and_checkout_repo(base_path: pathlib.Path, origin_url: str, ref: str):
     return str(base_path / "repo")
 
 
-@pytest.mark.xfail
 @flaky
 def test_arrow_solvable(tmp_path):
     feedstock_dir = clone_and_checkout_repo(
