@@ -506,6 +506,7 @@ def virtual_package_repodata():
     fake_packages = [
         FakePackage("__glibc", "2.12"),
         FakePackage("__glibc", "2.17"),
+        FakePackage("__glibc", "2.28"),
         FakePackage("__cuda", "9.2"),
         FakePackage("__cuda", "10.0"),
         FakePackage("__cuda", "10.1"),
@@ -515,6 +516,17 @@ def virtual_package_repodata():
         FakePackage("__cuda", "11.2"),
         FakePackage("__cuda", "11.3"),
         FakePackage("__cuda", "11.4"),
+        FakePackage("__cuda", "11.5"),
+        FakePackage("__cuda", "11.6"),
+        FakePackage("__cuda", "11.7"),
+        FakePackage("__cuda", "11.8"),
+        FakePackage("__cuda", "11.9"),
+        FakePackage("__cuda", "12.0"),
+        FakePackage("__cuda", "12.1"),
+        FakePackage("__cuda", "12.2"),
+        FakePackage("__cuda", "12.3"),
+        FakePackage("__cuda", "12.4"),
+        FakePackage("__cuda", "12.5"),
     ]
     for pkg in fake_packages:
         repodata.add_package(pkg)
@@ -549,6 +561,12 @@ def virtual_package_repodata():
         "13.0",
         "13.1",
         "13.2",
+        "13.3",
+        "13.4",
+        "13.5",
+        "13.6",
+        "13.7",
+        "13.8",
     ]:
         repodata.add_package(
             FakePackage("__osx", osx_ver),
