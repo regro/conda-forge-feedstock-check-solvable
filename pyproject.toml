@@ -1,0 +1,36 @@
+[build-system]
+requires = [
+    "setuptools>=45",
+    "setuptools_scm>=7",
+    "tomli>=1.0.0; python_version < '3.11'",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "conda-forge-feedstock-check-solvable"
+authors = [
+    {name = "conda-forge-tick development team", email = "condaforge@gmail.com"},
+]
+description = "A mamba-based package to check if a conda-forge feedstock is solvable."
+dynamic = ["version", "dependencies"]
+license = {file = "LICENSE"}
+readme = "README.md"
+
+[project.urls]
+home = "https://github.com/regro/conda-forge-feedstock-check-solvable"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools.packages.find]
+exclude = ['tests*']
+
+[tool.setuptools_scm]
+write_to = "conda_forge_feedstock_check_solvable/_version.py"
+write_to_template = "__version__ = '{version}'\n"
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
