@@ -17,6 +17,7 @@ from conda_forge_feedstock_check_solvable.mamba_solver import (
     virtual_package_repodata,
     apply_pins,
     _mamba_factory,
+    suppress_conda_build_logging,
 )
 
 FEEDSTOCK_DIR = os.path.join(os.path.dirname(__file__), "test_feedstock")
@@ -79,30 +80,31 @@ python:
         )
     import conda_build.api
 
-    config = conda_build.config.get_or_merge_config(
-        None,
-        platform="linux",
-        arch="64",
-        variant_config_files=[],
-    )
-    cbc, _ = conda_build.variants.get_package_combined_spec(
-        str(tmp_path),
-        config=config,
-    )
+    with suppress_conda_build_logging():
+        config = conda_build.config.get_or_merge_config(
+            None,
+            platform="linux",
+            arch="64",
+            variant_config_files=[],
+        )
+        cbc, _ = conda_build.variants.get_package_combined_spec(
+            str(tmp_path),
+            config=config,
+        )
 
-    solver = _mamba_factory(("conda-forge", "defaults"), "linux-64")
+        solver = _mamba_factory(("conda-forge", "defaults"), "linux-64")
 
-    metas = conda_build.api.render(
-        str(tmp_path),
-        platform="linux",
-        arch="64",
-        ignore_system_variants=True,
-        variants=cbc,
-        permit_undefined_jinja=True,
-        finalize=False,
-        bypass_env_check=True,
-        channel_urls=("conda-forge", "defaults"),
-    )
+        metas = conda_build.api.render(
+            str(tmp_path),
+            platform="linux",
+            arch="64",
+            ignore_system_variants=True,
+            variants=cbc,
+            permit_undefined_jinja=True,
+            finalize=False,
+            bypass_env_check=True,
+            channel_urls=("conda-forge", "defaults"),
+        )
 
     m = metas[0][0]
     outnames = [m.name() for m, _, _ in metas]
@@ -126,9 +128,12 @@ python:
 
 @flaky
 def test_mamba_solver_nvcc():
-    virtual_packages = virtual_package_repodata()
-    solver = MambaSolver([virtual_packages, "conda-forge", "defaults"], "linux-64")
-    out = solver.solve(["gcc_linux-64 7.*", "gxx_linux-64 7.*", "nvcc_linux-64 11.0.*"])
+    with suppress_conda_build_logging():
+        virtual_packages = virtual_package_repodata()
+        solver = MambaSolver([virtual_packages, "conda-forge", "defaults"], "linux-64")
+        out = solver.solve(
+            ["gcc_linux-64 7.*", "gxx_linux-64 7.*", "nvcc_linux-64 11.0.*"]
+        )
     assert out[0], out[1]
 
 
@@ -453,65 +458,67 @@ def test_virtual_package(feedstock_dir, tmp_path_factory):
 
 @flaky
 def test_mamba_solver_hangs():
-    solver = _mamba_factory(("conda-forge", "defaults"), "osx-64")
-    res = solver.solve(
-        [
-            "pytest",
-            "selenium",
-            "requests-mock",
-            "ncurses >=6.2,<7.0a0",
-            "libffi >=3.2.1,<4.0a0",
-            "xz >=5.2.5,<6.0a0",
-            "nbconvert >=5.6",
-            "sqlalchemy",
-            "jsonschema",
-            "six >=1.11",
-            "python_abi 3.9.* *_cp39",
-            "tornado",
-            "jupyter",
-            "requests",
-            "jupyter_client",
-            "notebook >=4.2",
-            "tk >=8.6.10,<8.7.0a0",
-            "openssl >=1.1.1h,<1.1.2a",
-            "readline >=8.0,<9.0a0",
-            "fuzzywuzzy",
-            "python >=3.9,<3.10.0a0",
-            "traitlets",
-            "sqlite >=3.33.0,<4.0a0",
-            "alembic",
-            "zlib >=1.2.11,<1.3.0a0",
-            "python-dateutil",
-            "nbformat",
-            "jupyter_core",
-        ],
-    )
+    with suppress_conda_build_logging():
+        solver = _mamba_factory(("conda-forge", "defaults"), "osx-64")
+        res = solver.solve(
+            [
+                "pytest",
+                "selenium",
+                "requests-mock",
+                "ncurses >=6.2,<7.0a0",
+                "libffi >=3.2.1,<4.0a0",
+                "xz >=5.2.5,<6.0a0",
+                "nbconvert >=5.6",
+                "sqlalchemy",
+                "jsonschema",
+                "six >=1.11",
+                "python_abi 3.9.* *_cp39",
+                "tornado",
+                "jupyter",
+                "requests",
+                "jupyter_client",
+                "notebook >=4.2",
+                "tk >=8.6.10,<8.7.0a0",
+                "openssl >=1.1.1h,<1.1.2a",
+                "readline >=8.0,<9.0a0",
+                "fuzzywuzzy",
+                "python >=3.9,<3.10.0a0",
+                "traitlets",
+                "sqlite >=3.33.0,<4.0a0",
+                "alembic",
+                "zlib >=1.2.11,<1.3.0a0",
+                "python-dateutil",
+                "nbformat",
+                "jupyter_core",
+            ],
+        )
     assert res[0]
 
-    solver = _mamba_factory(("conda-forge", "defaults"), "linux-64")
-    solver.solve(
-        [
-            "gdal >=2.1.0",
-            "ncurses >=6.2,<7.0a0",
-            "geopandas",
-            "scikit-image >=0.16.0",
-            "pandas",
-            "pyproj >=2.2.0",
-            "libffi >=3.2.1,<4.0a0",
-            "six",
-            "tk >=8.6.10,<8.7.0a0",
-            "spectral",
-            "zlib >=1.2.11,<1.3.0a0",
-            "shapely",
-            "readline >=8.0,<9.0a0",
-            "python >=3.8,<3.9.0a0",
-            "numpy",
-            "python_abi 3.8.* *_cp38",
-            "xz >=5.2.5,<6.0a0",
-            "openssl >=1.1.1h,<1.1.2a",
-            "sqlite >=3.33.0,<4.0a0",
-        ],
-    )
+    with suppress_conda_build_logging():
+        solver = _mamba_factory(("conda-forge", "defaults"), "linux-64")
+        solver.solve(
+            [
+                "gdal >=2.1.0",
+                "ncurses >=6.2,<7.0a0",
+                "geopandas",
+                "scikit-image >=0.16.0",
+                "pandas",
+                "pyproj >=2.2.0",
+                "libffi >=3.2.1,<4.0a0",
+                "six",
+                "tk >=8.6.10,<8.7.0a0",
+                "spectral",
+                "zlib >=1.2.11,<1.3.0a0",
+                "shapely",
+                "readline >=8.0,<9.0a0",
+                "python >=3.8,<3.9.0a0",
+                "numpy",
+                "python_abi 3.8.* *_cp38",
+                "xz >=5.2.5,<6.0a0",
+                "openssl >=1.1.1h,<1.1.2a",
+                "sqlite >=3.33.0,<4.0a0",
+            ],
+        )
     assert res[0]
 
 
@@ -602,3 +609,9 @@ python_impl:
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
     assert any("python3.10" in k for k in solvable_by_variant)
+
+
+if __name__ == "__main__":
+    pth = os.path.join(os.path.dirname(__file__), "r-base-feedstock")
+    assert is_recipe_solvable(pth, timeout=None)[0]
+    assert is_recipe_solvable(pth)[0]

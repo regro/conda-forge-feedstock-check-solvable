@@ -13,6 +13,7 @@ import rapidjson as json
 import os
 import logging
 import glob
+import io
 import functools
 import pathlib
 import pprint
@@ -24,10 +25,11 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, Tuple, List, FrozenSet, Set, Iterable
-
+import contextlib
 import psutil
 from ruamel.yaml import YAML
 import cachetools.func
+import wurlitzer
 
 from conda.models.match_spec import MatchSpec
 import conda_build.api
@@ -73,6 +75,53 @@ ALL_PLATFORMS = {
     "osx-arm64",
     "win-64",
 }
+
+
+@contextlib.contextmanager
+def suppress_conda_build_logging():
+    import conda_build.conda_interface
+    old_val = conda_build.conda_interface.cc_conda_build.get("log_config_file")
+    ulogger = None
+    ulevel = None
+
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_file = os.path.join(tmpdir, "logging.yaml")
+            with open(config_file, "w") as fp:
+                fp.write("""\
+version: 1
+loggers:
+    conda_build.api:
+        level: CRITICAL
+    conda_build.config:
+        level: CRITICAL
+    conda_build.metadata:
+        level: CRITICAL
+    conda_build.variants:
+        level: CRITICAL
+    urllib3:
+        level: CRITICAL
+    urllib3.connectionpool:
+        level: CRITICAL
+""")
+            conda_build.conda_interface.cc_conda_build["log_config_file"] = config_file
+
+            with wurlitzer.sys_pipes():
+                with contextlib.redirect_stderr(io.StringIO()):
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        # this code has to be here to work. IDK why.
+                        ulogger = logging.getLogger("urllib3")
+                        ulevel = logger.getEffectiveLevel()
+                        ulogger.setLevel(logging.CRITICAL)
+                        yield None
+    finally:
+        if ulogger is not None and ulevel is not None:
+            ulogger.setLevel(ulevel)
+        if old_val is not None:
+            conda_build.conda_interface.cc_conda_build["log_config_file"] = old_val
+        else:
+            if "log_config_file" in conda_build.conda_interface.cc_conda_build:
+                del conda_build.conda_interface.cc_conda_build["log_config_file"]
 
 
 def _munge_req_star(req):
@@ -277,7 +326,8 @@ def _get_run_export(link_tuple):
     else:
         channel_url = link_tuple[0].rsplit("/", maxsplit=1)[0]
 
-    cd = download_channeldata(channel_url)
+    with suppress_conda_build_logging():
+        cd = download_channeldata(channel_url)
     data = json.loads(link_tuple[2])
     name = data["name"]
 
@@ -511,17 +561,21 @@ def virtual_package_repodata():
         repodata.add_package(FakePackage("__glibc", "2.%d" % glibc_minor))
 
     # cuda - get from cuda-version on conda-forge
-    cuda_pkgs = json.loads(
-        subprocess.check_output(
-            "CONDA_SUBDIR=linux-64 conda search cuda-version -c conda-forge --json",
-            shell=True,
-            text=True,
+    try:
+        cuda_pkgs = json.loads(
+            subprocess.check_output(
+                "CONDA_SUBDIR=linux-64 conda search cuda-version -c conda-forge --json",
+                shell=True,
+                text=True,
+                stderr=subprocess.PIPE,
+            )
         )
-    )
-    cuda_vers = [
-        pkg["version"]
-        for pkg in cuda_pkgs["cuda-version"]
-    ]
+        cuda_vers = [
+            pkg["version"]
+            for pkg in cuda_pkgs["cuda-version"]
+        ]
+    except Exception:
+        cuda_vers = []
     # extra hard coded list to make sure we don't miss anything
     cuda_vers += [
         "9.2",
@@ -725,16 +779,18 @@ def _is_recipe_solvable(
         if arch not in ["32", "aarch64", "ppc64le", "armv7l", "arm64"]:
             arch = "64"
 
-        _solvable, _errors = _is_recipe_solvable_on_platform(
-            os.path.join(feedstock_dir, "recipe"),
-            cbc_fname,
-            platform,
-            arch,
-            build_platform_arch=(
-                build_platform.get(f"{platform}_{arch}", f"{platform}_{arch}")
-            ),
-            additional_channels=additional_channels,
-        )
+        logger.info("CHECKING RECIPE SOLVABLE: %s", os.path.basename(cbc_fname))
+        with suppress_conda_build_logging():
+            _solvable, _errors = _is_recipe_solvable_on_platform(
+                os.path.join(feedstock_dir, "recipe"),
+                cbc_fname,
+                platform,
+                arch,
+                build_platform_arch=(
+                    build_platform.get(f"{platform}_{arch}", f"{platform}_{arch}")
+                ),
+                additional_channels=additional_channels,
+            )
         solvable = solvable and _solvable
         cbc_name = os.path.basename(cbc_fname).rsplit(".", maxsplit=1)[0]
         errors.extend([f"{cbc_name}: {e}" for e in _errors])
