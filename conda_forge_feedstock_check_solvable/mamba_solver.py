@@ -503,33 +503,54 @@ def virtual_package_repodata():
 
     tmp_path = pathlib.Path(tmp_dir)
     repodata = FakeRepoData(tmp_path)
+
+    # glibc
     fake_packages = [
         FakePackage("__glibc", "2.12"),
         FakePackage("__glibc", "2.17"),
         FakePackage("__glibc", "2.28"),
-        FakePackage("__cuda", "9.2"),
-        FakePackage("__cuda", "10.0"),
-        FakePackage("__cuda", "10.1"),
-        FakePackage("__cuda", "10.2"),
-        FakePackage("__cuda", "11.0"),
-        FakePackage("__cuda", "11.1"),
-        FakePackage("__cuda", "11.2"),
-        FakePackage("__cuda", "11.3"),
-        FakePackage("__cuda", "11.4"),
-        FakePackage("__cuda", "11.5"),
-        FakePackage("__cuda", "11.6"),
-        FakePackage("__cuda", "11.7"),
-        FakePackage("__cuda", "11.8"),
-        FakePackage("__cuda", "11.9"),
-        FakePackage("__cuda", "12.0"),
-        FakePackage("__cuda", "12.1"),
-        FakePackage("__cuda", "12.2"),
-        FakePackage("__cuda", "12.3"),
-        FakePackage("__cuda", "12.4"),
-        FakePackage("__cuda", "12.5"),
     ]
     for pkg in fake_packages:
         repodata.add_package(pkg)
+
+    # cuda - get from cuda-version on conda-forge
+    cuda_pkgs = json.loads(
+        subprocess.check_output(
+            "CONDA_SUBDIR=linux-64 conda search cuda-version -c conda-forge --json",
+            shell=True,
+            text=True,
+        )
+    )
+    cuda_vers = [
+        pkg["version"]
+        for pkg in cuda_pkgs["cuda-version"]
+    ]
+    # extra hard coded list to make sure we don't miss anything
+    cuda_vers += [
+        "9.2",
+        "10.0",
+        "10.1",
+        "10.2",
+        "11.0",
+        "11.1",
+        "11.2",
+        "11.3",
+        "11.4",
+        "11.5",
+        "11.6",
+        "11.7",
+        "11.8",
+        "12.0",
+        "12.1",
+        "12.2",
+        "12.3",
+        "12.4",
+        "12.5",
+    ]
+    cuda_vers = set(cuda_vers)
+    for cuda_ver in cuda_vers:
+        repodata.add_package(FakePackage("__cuda", cuda_ver))
+
     for osx_ver in [
         "10.9",
         "10.10",
@@ -607,7 +628,7 @@ def _func(feedstock_dir, additional_channels, build_platform, conn):
 
 def is_recipe_solvable(
     feedstock_dir,
-    additional_channels=(),
+    additional_channels=None,
     timeout=600,
     build_platform=None,
 ) -> Tuple[bool, List[str], Dict[str, bool]]:
@@ -691,8 +712,8 @@ def _is_recipe_solvable(
 
     build_platform = build_platform or {}
 
-    if not additional_channels:
-        additional_channels = [virtual_package_repodata()]
+    additional_channels = additional_channels or []
+    additional_channels += [virtual_package_repodata()]
     os.environ["CONDA_OVERRIDE_GLIBC"] = "2.50"
 
     errors = []
