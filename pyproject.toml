@@ -26,7 +26,7 @@ dependencies = {file = ["requirements.txt"]}
 exclude = ['tests']
 
 [tool.setuptools_scm]
-write_to = "conda_forge_feedstock_check-solvable/_version.py"
+write_to = "conda_forge_feedstock_check_solvable/_version.py"
 write_to_template = "__version__ = '{version}'\n"
 
 [tool.black]
