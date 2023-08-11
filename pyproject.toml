@@ -23,7 +23,7 @@ home = "https://github.com/regro/conda-forge-feedstock-check-solvable"
 dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools.packages.find]
-exclude = ['tests']
+exclude = ['tests*']
 
 [tool.setuptools_scm]
 write_to = "conda_forge_feedstock_check_solvable/_version.py"
