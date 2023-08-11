@@ -129,3 +129,4 @@ dmypy.json
 .pyre/
 
 conda_forge_feedstock_check_solvable.egg-info/
+conda_forge_feedstock_check_solvable/_version.py

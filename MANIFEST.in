@@ -1,0 +1,3 @@
+include conda-forge-feedstock-check-solvable/_version.py
+include requirements.txt
+include LICENSE
