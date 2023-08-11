@@ -53,6 +53,8 @@ DEFAULT_RUN_EXPORTS = {
     "noarch": set(),
 }
 
+MAX_GLIBC_MINOR = 50
+
 # turn off pip for python
 api.Context().add_pip_as_python_dependency = False
 
@@ -505,7 +507,7 @@ def virtual_package_repodata():
     repodata = FakeRepoData(tmp_path)
 
     # glibc
-    for glibc_minor in range(12, 51):
+    for glibc_minor in range(12, MAX_GLIBC_MINOR+1):
         repodata.add_package(FakePackage("__glibc", "2.%d" % glibc_minor))
 
     # cuda - get from cuda-version on conda-forge
@@ -686,7 +688,7 @@ def _is_recipe_solvable(
 
     additional_channels = additional_channels or []
     additional_channels += [virtual_package_repodata()]
-    os.environ["CONDA_OVERRIDE_GLIBC"] = "2.50"
+    os.environ["CONDA_OVERRIDE_GLIBC"] = "2.%d" % MAX_GLIBC_MINOR
 
     errors = []
     cbcs = sorted(glob.glob(os.path.join(feedstock_dir, ".ci_support", "*.yaml")))
