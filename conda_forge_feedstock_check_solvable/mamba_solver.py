@@ -13,7 +13,6 @@ import rapidjson as json
 import os
 import logging
 import glob
-import io
 import functools
 import pathlib
 import pprint
@@ -81,8 +80,17 @@ ALL_PLATFORMS = {
 def suppress_conda_build_logging():
     import conda_build.conda_interface
     old_val = conda_build.conda_interface.cc_conda_build.get("log_config_file")
-    ulogger = None
-    ulevel = None
+    if "CONDA_FORGE_FEEDSTOCK_CHECK_SOLVABLE_DEBUG" in os.environ:
+        suppress = False
+    else:
+        suppress = True
+
+    if not suppress:
+        try:
+            yield None
+        finally:
+            pass
+        return
 
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -106,17 +114,9 @@ loggers:
 """)
             conda_build.conda_interface.cc_conda_build["log_config_file"] = config_file
 
-            with wurlitzer.sys_pipes():
-                with contextlib.redirect_stderr(io.StringIO()):
-                    with contextlib.redirect_stdout(io.StringIO()):
-                        # this code has to be here to work. IDK why.
-                        ulogger = logging.getLogger("urllib3")
-                        ulevel = logger.getEffectiveLevel()
-                        ulogger.setLevel(logging.CRITICAL)
-                        yield None
+            with wurlitzer.pipes():
+                yield None
     finally:
-        if ulogger is not None and ulevel is not None:
-            ulogger.setLevel(ulevel)
         if old_val is not None:
             conda_build.conda_interface.cc_conda_build["log_config_file"] = old_val
         else:
