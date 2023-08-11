@@ -612,17 +612,6 @@ python_impl:
 
 
 if __name__ == "__main__":
-    import logging
-    logger = logging.getLogger("conda_forge_feedstock_check_solvable.mamba_solver")
-    if not logger.handlers:
-        logger.setLevel(logging.INFO)
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
-        ch.setFormatter(
-            logging.Formatter("%(asctime)-15s %(levelname)-8s %(name)s || %(message)s"),
-        )
-        logger.addHandler(ch)
-
     pth = os.path.join(os.path.dirname(__file__), "xgboost-feedstock")
-    # assert is_recipe_solvable(pth, timeout=None)[0]
-    assert is_recipe_solvable(pth)[0]
+    assert is_recipe_solvable(pth, timeout=None, verbosity=1)[0]
+    assert is_recipe_solvable(pth, verbosity=1)[0]

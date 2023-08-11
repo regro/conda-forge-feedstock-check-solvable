@@ -74,31 +74,52 @@ ALL_PLATFORMS = {
 
 # I cannot get python logging to work correctly with all of the hacks to
 # make conda-build be quiet.
-# so these env vars are a thing now
-if "CONDA_FORGE_FEEDSTOCK_CHECK_SOLVABLE_DEBUG" in os.environ:
-    PRINT_DEBUG = True
-else:
-    PRINT_DEBUG = False
-
-if "CONDA_FORGE_FEEDSTOCK_CHECK_SOLVABLE_QUIET" in os.environ:
-    QUIET = True
-else:
-    QUIET = False
+# so theis is a thing
+VERBOSITY = 1
+VERBOSITY_PREFIX = {
+    0: "CRITICAL",
+    1: "WARNING",
+    2: "INFO",
+    3: "DEBUG",
+}
 
 
-def print_local(fmt, *args, debug=False):
-    if QUIET:
-        pass
-    else:
-        if debug:
-            if PRINT_DEBUG:
-                print("DEBUG:" + __name__ + ":" + fmt % args, flush=True)
+def print_verb(fmt, *args, verbosity=0):
+    from inspect import currentframe, getframeinfo
+
+    frameinfo = getframeinfo(currentframe())
+
+    if verbosity <= VERBOSITY:
+        if args:
+            msg = fmt % args
         else:
-            print("INFO:" + __name__ + ":" + fmt % args, flush=True)
+            msg = fmt
+        print(
+            VERBOSITY_PREFIX[verbosity]
+            + ":"
+            + __name__
+            + ":"
+            + "%d" % frameinfo.lineno
+            + ":"
+            + msg,
+            flush=True,
+        )
+
+
+def print_critical(fmt, *args):
+    print_verb(fmt, *args, verbosity=0)
+
+
+def print_warning(fmt, *args):
+    print_verb(fmt, *args, verbosity=1)
+
+
+def print_info(fmt, *args):
+    print_verb(fmt, *args, verbosity=2)
 
 
 def print_debug(fmt, *args):
-    print_local(fmt, *args, debug=True)
+    print_verb(fmt, *args, verbosity=3)
 
 
 @contextlib.contextmanager
@@ -393,7 +414,7 @@ def _get_run_export(link_tuple):
 
         # fall back to getting repodata shard if needed
         if run_exports is None:
-            print_local(
+            print_info(
                 "RUN EXPORTS: downloading package %s/%s/%s"
                 % (channel_url, link_tuple[0].split("/")[-1], link_tuple[1]),
             )
@@ -483,7 +504,7 @@ class MambaSolver:
 
         err = None
         if not success:
-            print_local(
+            print_warning(
                 "MAMBA failed to solve specs \n\n%s\n\nfor channels "
                 "\n\n%s\n\nThe reported errors are:\n\n%s\n",
                 pprint.pformat(_specs),
@@ -664,12 +685,13 @@ def virtual_package_repodata():
     return repodata.channel_url
 
 
-def _func(feedstock_dir, additional_channels, build_platform, conn):
+def _func(feedstock_dir, additional_channels, build_platform, verbosity, conn):
     try:
         res = _is_recipe_solvable(
             feedstock_dir,
             additional_channels=additional_channels,
             build_platform=build_platform,
+            verbosity=verbosity,
         )
         conn.send(res)
     except Exception as e:
@@ -683,6 +705,7 @@ def is_recipe_solvable(
     additional_channels=None,
     timeout=600,
     build_platform=None,
+    verbosity=1,
 ) -> Tuple[bool, List[str], Dict[str, bool]]:
     """Compute if a recipe is solvable.
 
@@ -701,6 +724,9 @@ def is_recipe_solvable(
         If not None, then the work will be run in a separate process and
         this function will return True if the work doesn't complete before `timeout`
         seconds.
+    verbosity : int
+        An int indicating the level of verbosity from 0 (no output) to 3
+        (gobbs of output).
 
     Returns
     -------
@@ -718,7 +744,13 @@ def is_recipe_solvable(
         parent_conn, child_conn = Pipe()
         p = Process(
             target=_func,
-            args=(feedstock_dir, additional_channels, build_platform, child_conn),
+            args=(
+                feedstock_dir,
+                additional_channels,
+                build_platform,
+                verbosity,
+                child_conn,
+            ),
         )
         p.start()
         if parent_conn.poll(timeout):
@@ -730,7 +762,7 @@ def is_recipe_solvable(
                     {},
                 )
         else:
-            print_local("MAMBA SOLVER TIMEOUT for %s", feedstock_dir)
+            print_warning("MAMBA SOLVER TIMEOUT for %s", feedstock_dir)
             res = (
                 True,
                 [],
@@ -751,6 +783,7 @@ def is_recipe_solvable(
             feedstock_dir,
             additional_channels=additional_channels,
             build_platform=build_platform,
+            verbosity=verbosity,
         )
 
     return res
@@ -760,7 +793,11 @@ def _is_recipe_solvable(
     feedstock_dir,
     additional_channels=(),
     build_platform=None,
+    verbosity=1,
 ) -> Tuple[bool, List[str], Dict[str, bool]]:
+
+    global VERBOSITY
+    VERBOSITY = verbosity
 
     build_platform = build_platform or {}
 
@@ -776,7 +813,7 @@ def _is_recipe_solvable(
             "results in no builds for a recipe (e.g., a recipe is python 2.7 only). "
             "This attempted migration is being reported as not solvable.",
         )
-        print_local(errors[-1])
+        print_warning(errors[-1])
         return False, errors, {}
 
     if not os.path.exists(os.path.join(feedstock_dir, "recipe", "meta.yaml")):
@@ -784,10 +821,10 @@ def _is_recipe_solvable(
             "No `recipe/meta.yaml` file found! This issue is quite weird and "
             "someone should investigate!",
         )
-        print_local(errors[-1])
+        print_warning(errors[-1])
         return False, errors, {}
 
-    print_local("CHECKING FEEDSTOCK: %s", os.path.basename(feedstock_dir))
+    print_info("CHECKING FEEDSTOCK: %s", os.path.basename(feedstock_dir))
     solvable = True
     solvable_by_cbc = {}
     for cbc_fname in cbcs:
@@ -804,7 +841,7 @@ def _is_recipe_solvable(
         if arch not in ["32", "aarch64", "ppc64le", "armv7l", "arm64"]:
             arch = "64"
 
-        print_local("CHECKING RECIPE SOLVABLE: %s", os.path.basename(cbc_fname))
+        print_info("CHECKING RECIPE SOLVABLE: %s", os.path.basename(cbc_fname))
         _solvable, _errors = _is_recipe_solvable_on_platform(
             os.path.join(feedstock_dir, "recipe"),
             cbc_fname,
@@ -993,13 +1030,12 @@ def _is_recipe_solvable_on_platform(
 
         if host_req:
             host_req = _clean_reqs(host_req, outnames)
-            with suppress_conda_build_logging():
-                _solvable, _err, host_req, host_rx = solver.solve(
-                    host_req,
-                    get_run_exports=True,
-                    ignore_run_exports_from=ign_runex_from,
-                    ignore_run_exports=ign_runex,
-                )
+            _solvable, _err, host_req, host_rx = solver.solve(
+                host_req,
+                get_run_exports=True,
+                ignore_run_exports_from=ign_runex_from,
+                ignore_run_exports=ign_runex,
+            )
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
@@ -1013,8 +1049,7 @@ def _is_recipe_solvable_on_platform(
         if run_req:
             run_req = apply_pins(run_req, host_req or [], build_req or [], outnames, m)
             run_req = _clean_reqs(run_req, outnames)
-            with suppress_conda_build_logging():
-                _solvable, _err, _ = solver.solve(run_req)
+            _solvable, _err, _ = solver.solve(run_req)
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
@@ -1026,14 +1061,13 @@ def _is_recipe_solvable_on_platform(
         )
         if tst_req:
             tst_req = _clean_reqs(tst_req, outnames)
-            with suppress_conda_build_logging():
-                _solvable, _err, _ = solver.solve(tst_req)
+            _solvable, _err, _ = solver.solve(tst_req)
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
 
-    print_local("RUN EXPORT CACHE STATUS: %s", _get_run_export.cache_info())
-    print_local(
+    print_info("RUN EXPORT CACHE STATUS: %s", _get_run_export.cache_info())
+    print_info(
         "MAMBA SOLVER MEM USAGE: %d MB",
         psutil.Process().memory_info().rss // 1024**2,
     )
