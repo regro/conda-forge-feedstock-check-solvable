@@ -11,7 +11,6 @@ https://gist.github.com/wolfv/cd12bd4a448c77ff02368e97ffdf495a.
 """
 import rapidjson as json
 import os
-import logging
 import glob
 import functools
 import pathlib
@@ -24,10 +23,11 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, Tuple, List, FrozenSet, Set, Iterable
-
+import contextlib
 import psutil
 from ruamel.yaml import YAML
 import cachetools.func
+import wurlitzer
 
 from conda.models.match_spec import MatchSpec
 import conda_build.api
@@ -45,13 +45,13 @@ from conda_forge_metadata.artifact_info import (
 
 PACKAGE_CACHE = api.MultiPackageCache(pkgs_dirs)
 
-logger = logging.getLogger("conda_forge_tick.mamba_solver")
-
 DEFAULT_RUN_EXPORTS = {
     "weak": set(),
     "strong": set(),
     "noarch": set(),
 }
+
+MAX_GLIBC_MINOR = 50
 
 # turn off pip for python
 api.Context().add_pip_as_python_dependency = False
@@ -71,6 +71,103 @@ ALL_PLATFORMS = {
     "osx-arm64",
     "win-64",
 }
+
+# I cannot get python logging to work correctly with all of the hacks to
+# make conda-build be quiet.
+# so theis is a thing
+VERBOSITY = 1
+VERBOSITY_PREFIX = {
+    0: "CRITICAL",
+    1: "WARNING",
+    2: "INFO",
+    3: "DEBUG",
+}
+
+
+def print_verb(fmt, *args, verbosity=0):
+    from inspect import currentframe, getframeinfo
+
+    frameinfo = getframeinfo(currentframe())
+
+    if verbosity <= VERBOSITY:
+        if args:
+            msg = fmt % args
+        else:
+            msg = fmt
+        print(
+            VERBOSITY_PREFIX[verbosity]
+            + ":"
+            + __name__
+            + ":"
+            + "%d" % frameinfo.lineno
+            + ":"
+            + msg,
+            flush=True,
+        )
+
+
+def print_critical(fmt, *args):
+    print_verb(fmt, *args, verbosity=0)
+
+
+def print_warning(fmt, *args):
+    print_verb(fmt, *args, verbosity=1)
+
+
+def print_info(fmt, *args):
+    print_verb(fmt, *args, verbosity=2)
+
+
+def print_debug(fmt, *args):
+    print_verb(fmt, *args, verbosity=3)
+
+
+@contextlib.contextmanager
+def suppress_conda_build_logging():
+    import conda_build.conda_interface
+    old_val = conda_build.conda_interface.cc_conda_build.get("log_config_file")
+    if "CONDA_FORGE_FEEDSTOCK_CHECK_SOLVABLE_DEBUG" in os.environ:
+        suppress = False
+    else:
+        suppress = True
+
+    if not suppress:
+        try:
+            yield None
+        finally:
+            pass
+        return
+
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_file = os.path.join(tmpdir, "logging.yaml")
+            with open(config_file, "w") as fp:
+                fp.write("""\
+version: 1
+loggers:
+    conda_build.api:
+        level: CRITICAL
+    conda_build.config:
+        level: CRITICAL
+    conda_build.metadata:
+        level: CRITICAL
+    conda_build.variants:
+        level: CRITICAL
+    urllib3:
+        level: CRITICAL
+    urllib3.connectionpool:
+        level: CRITICAL
+""")
+            conda_build.conda_interface.cc_conda_build["log_config_file"] = config_file
+
+            with wurlitzer.pipes():
+                yield None
+    finally:
+        if old_val is not None:
+            conda_build.conda_interface.cc_conda_build["log_config_file"] = old_val
+        else:
+            if "log_config_file" in conda_build.conda_interface.cc_conda_build:
+                del conda_build.conda_interface.cc_conda_build["log_config_file"]
 
 
 def _munge_req_star(req):
@@ -189,12 +286,12 @@ class FakeRepoData:
         for subdir in all_subdirs:
             self._write_subdir(subdir)
 
-        logger.info("Wrote fake repodata to %s", self.base_path)
+        print_debug("Wrote fake repodata to %s", self.base_path)
         import glob
 
         for filename in glob.iglob(str(self.base_path / "**"), recursive=True):
-            logger.info(filename)
-        logger.info("repo: %s", self.channel_url)
+            print_debug(filename)
+        print_debug("repo: %s", self.channel_url)
 
     def __enter__(self):
         return self
@@ -233,7 +330,7 @@ def _get_run_export_download(link_tuple):
 
             for key in DEFAULT_RUN_EXPORTS:
                 if key in run_exports:
-                    logger.debug(
+                    print_debug(
                         "RUN EXPORT: %s %s %s",
                         pkg,
                         key,
@@ -299,7 +396,7 @@ def _get_run_export(link_tuple):
 
                 for k in rx:
                     if k in DEFAULT_RUN_EXPORTS:
-                        logger.debug(
+                        print_debug(
                             "RUN EXPORT: %s %s %s",
                             name,
                             k,
@@ -307,7 +404,7 @@ def _get_run_export(link_tuple):
                         )
                         run_exports[k].update(rx[k])
                     else:
-                        logger.debug(
+                        print_debug(
                             "RUN EXPORT: %s %s %s",
                             name,
                             "weak",
@@ -317,7 +414,7 @@ def _get_run_export(link_tuple):
 
         # fall back to getting repodata shard if needed
         if run_exports is None:
-            logger.info(
+            print_info(
                 "RUN EXPORTS: downloading package %s/%s/%s"
                 % (channel_url, link_tuple[0].split("/")[-1], link_tuple[1]),
             )
@@ -400,14 +497,14 @@ class MambaSolver:
 
         _specs = [_norm_spec(s) for s in specs]
 
-        logger.debug("MAMBA running solver for specs \n\n%s\n", pprint.pformat(_specs))
+        print_debug("MAMBA running solver for specs \n\n%s\n", pprint.pformat(_specs))
 
         solver.add_jobs(_specs, api.SOLVER_INSTALL)
         success = solver.solve()
 
         err = None
         if not success:
-            logger.warning(
+            print_warning(
                 "MAMBA failed to solve specs \n\n%s\n\nfor channels "
                 "\n\n%s\n\nThe reported errors are:\n\n%s\n",
                 pprint.pformat(_specs),
@@ -432,7 +529,7 @@ class MambaSolver:
                 )
 
             if get_run_exports:
-                logger.debug(
+                print_debug(
                     "MAMBA getting run exports for \n\n%s\n",
                     pprint.pformat(solution),
                 )
@@ -503,33 +600,53 @@ def virtual_package_repodata():
 
     tmp_path = pathlib.Path(tmp_dir)
     repodata = FakeRepoData(tmp_path)
-    fake_packages = [
-        FakePackage("__glibc", "2.12"),
-        FakePackage("__glibc", "2.17"),
-        FakePackage("__glibc", "2.28"),
-        FakePackage("__cuda", "9.2"),
-        FakePackage("__cuda", "10.0"),
-        FakePackage("__cuda", "10.1"),
-        FakePackage("__cuda", "10.2"),
-        FakePackage("__cuda", "11.0"),
-        FakePackage("__cuda", "11.1"),
-        FakePackage("__cuda", "11.2"),
-        FakePackage("__cuda", "11.3"),
-        FakePackage("__cuda", "11.4"),
-        FakePackage("__cuda", "11.5"),
-        FakePackage("__cuda", "11.6"),
-        FakePackage("__cuda", "11.7"),
-        FakePackage("__cuda", "11.8"),
-        FakePackage("__cuda", "11.9"),
-        FakePackage("__cuda", "12.0"),
-        FakePackage("__cuda", "12.1"),
-        FakePackage("__cuda", "12.2"),
-        FakePackage("__cuda", "12.3"),
-        FakePackage("__cuda", "12.4"),
-        FakePackage("__cuda", "12.5"),
+
+    # glibc
+    for glibc_minor in range(12, MAX_GLIBC_MINOR+1):
+        repodata.add_package(FakePackage("__glibc", "2.%d" % glibc_minor))
+
+    # cuda - get from cuda-version on conda-forge
+    try:
+        cuda_pkgs = json.loads(
+            subprocess.check_output(
+                "CONDA_SUBDIR=linux-64 conda search cuda-version -c conda-forge --json",
+                shell=True,
+                text=True,
+                stderr=subprocess.PIPE,
+            )
+        )
+        cuda_vers = [
+            pkg["version"]
+            for pkg in cuda_pkgs["cuda-version"]
+        ]
+    except Exception:
+        cuda_vers = []
+    # extra hard coded list to make sure we don't miss anything
+    cuda_vers += [
+        "9.2",
+        "10.0",
+        "10.1",
+        "10.2",
+        "11.0",
+        "11.1",
+        "11.2",
+        "11.3",
+        "11.4",
+        "11.5",
+        "11.6",
+        "11.7",
+        "11.8",
+        "12.0",
+        "12.1",
+        "12.2",
+        "12.3",
+        "12.4",
+        "12.5",
     ]
-    for pkg in fake_packages:
-        repodata.add_package(pkg)
+    cuda_vers = set(cuda_vers)
+    for cuda_ver in cuda_vers:
+        repodata.add_package(FakePackage("__cuda", cuda_ver))
+
     for osx_ver in [
         "10.9",
         "10.10",
@@ -541,37 +658,14 @@ def virtual_package_repodata():
         "10.16",
     ]:
         repodata.add_package(FakePackage("__osx", osx_ver), subdirs=["osx-64"])
-    for osx_ver in [
-        "11.0",
-        "11.0.1",
-        "11.1",
-        "11.2",
-        "11.2.1",
-        "11.2.2",
-        "11.2.3",
-        "11.3",
-        "11.4",
-        "11.5",
-        "12.0.1",
-        "12.1",
-        "12.2",
-        "12.3",
-        "12.4",
-        "12.5",
-        "13.0",
-        "13.1",
-        "13.2",
-        "13.3",
-        "13.4",
-        "13.5",
-        "13.6",
-        "13.7",
-        "13.8",
-    ]:
-        repodata.add_package(
-            FakePackage("__osx", osx_ver),
-            subdirs=["osx-64", "osx-arm64"],
-        )
+    for osx_major in range(11, 17):
+        for osx_minor in range(0, 17):
+            osx_ver = "%d.%d" % (osx_major, osx_minor)
+            repodata.add_package(
+                FakePackage("__osx", osx_ver),
+                subdirs=["osx-64", "osx-arm64"],
+            )
+
     repodata.add_package(
         FakePackage("__win", "0"),
         subdirs=list(subdir for subdir in ALL_PLATFORMS if subdir.startswith("win")),
@@ -591,12 +685,13 @@ def virtual_package_repodata():
     return repodata.channel_url
 
 
-def _func(feedstock_dir, additional_channels, build_platform, conn):
+def _func(feedstock_dir, additional_channels, build_platform, verbosity, conn):
     try:
         res = _is_recipe_solvable(
             feedstock_dir,
             additional_channels=additional_channels,
             build_platform=build_platform,
+            verbosity=verbosity,
         )
         conn.send(res)
     except Exception as e:
@@ -607,9 +702,10 @@ def _func(feedstock_dir, additional_channels, build_platform, conn):
 
 def is_recipe_solvable(
     feedstock_dir,
-    additional_channels=(),
+    additional_channels=None,
     timeout=600,
     build_platform=None,
+    verbosity=1,
 ) -> Tuple[bool, List[str], Dict[str, bool]]:
     """Compute if a recipe is solvable.
 
@@ -628,6 +724,9 @@ def is_recipe_solvable(
         If not None, then the work will be run in a separate process and
         this function will return True if the work doesn't complete before `timeout`
         seconds.
+    verbosity : int
+        An int indicating the level of verbosity from 0 (no output) to 3
+        (gobbs of output).
 
     Returns
     -------
@@ -645,7 +744,13 @@ def is_recipe_solvable(
         parent_conn, child_conn = Pipe()
         p = Process(
             target=_func,
-            args=(feedstock_dir, additional_channels, build_platform, child_conn),
+            args=(
+                feedstock_dir,
+                additional_channels,
+                build_platform,
+                verbosity,
+                child_conn,
+            ),
         )
         p.start()
         if parent_conn.poll(timeout):
@@ -657,7 +762,7 @@ def is_recipe_solvable(
                     {},
                 )
         else:
-            logger.warning("MAMBA SOLVER TIMEOUT for %s", feedstock_dir)
+            print_warning("MAMBA SOLVER TIMEOUT for %s", feedstock_dir)
             res = (
                 True,
                 [],
@@ -678,6 +783,7 @@ def is_recipe_solvable(
             feedstock_dir,
             additional_channels=additional_channels,
             build_platform=build_platform,
+            verbosity=verbosity,
         )
 
     return res
@@ -687,13 +793,17 @@ def _is_recipe_solvable(
     feedstock_dir,
     additional_channels=(),
     build_platform=None,
+    verbosity=1,
 ) -> Tuple[bool, List[str], Dict[str, bool]]:
+
+    global VERBOSITY
+    VERBOSITY = verbosity
 
     build_platform = build_platform or {}
 
-    if not additional_channels:
-        additional_channels = [virtual_package_repodata()]
-    os.environ["CONDA_OVERRIDE_GLIBC"] = "2.50"
+    additional_channels = additional_channels or []
+    additional_channels += [virtual_package_repodata()]
+    os.environ["CONDA_OVERRIDE_GLIBC"] = "2.%d" % MAX_GLIBC_MINOR
 
     errors = []
     cbcs = sorted(glob.glob(os.path.join(feedstock_dir, ".ci_support", "*.yaml")))
@@ -703,7 +813,7 @@ def _is_recipe_solvable(
             "results in no builds for a recipe (e.g., a recipe is python 2.7 only). "
             "This attempted migration is being reported as not solvable.",
         )
-        logger.warning(errors[-1])
+        print_warning(errors[-1])
         return False, errors, {}
 
     if not os.path.exists(os.path.join(feedstock_dir, "recipe", "meta.yaml")):
@@ -711,9 +821,10 @@ def _is_recipe_solvable(
             "No `recipe/meta.yaml` file found! This issue is quite weird and "
             "someone should investigate!",
         )
-        logger.warning(errors[-1])
+        print_warning(errors[-1])
         return False, errors, {}
 
+    print_info("CHECKING FEEDSTOCK: %s", os.path.basename(feedstock_dir))
     solvable = True
     solvable_by_cbc = {}
     for cbc_fname in cbcs:
@@ -730,6 +841,7 @@ def _is_recipe_solvable(
         if arch not in ["32", "aarch64", "ppc64le", "armv7l", "arm64"]:
             arch = "64"
 
+        print_info("CHECKING RECIPE SOLVABLE: %s", os.path.basename(cbc_fname))
         _solvable, _errors = _is_recipe_solvable_on_platform(
             os.path.join(feedstock_dir, "recipe"),
             cbc_fname,
@@ -817,7 +929,7 @@ def _is_recipe_solvable_on_platform(
     if additional_channels:
         channel_sources = list(additional_channels) + channel_sources
 
-    logger.debug(
+    print_debug(
         "MAMBA: using channels %s on platform-arch %s-%s",
         channel_sources,
         platform,
@@ -826,40 +938,41 @@ def _is_recipe_solvable_on_platform(
 
     # here we extract the conda build config in roughly the same way that
     # it would be used in a real build
-    logger.debug("rendering recipe with conda build")
+    print_debug("rendering recipe with conda build")
 
-    for att in range(2):
-        try:
-            if att == 1:
-                os.system("rm -f %s/conda_build_config.yaml" % recipe_dir)
-            config = conda_build.config.get_or_merge_config(
-                None,
-                platform=platform,
-                arch=arch,
-                variant_config_files=[cbc_path],
-            )
-            cbc, _ = conda_build.variants.get_package_combined_spec(
-                recipe_dir,
-                config=config,
-            )
-        except Exception:
-            if att == 0:
-                pass
-            else:
-                raise
+    with suppress_conda_build_logging():
+        for att in range(2):
+            try:
+                if att == 1:
+                    os.system("rm -f %s/conda_build_config.yaml" % recipe_dir)
+                config = conda_build.config.get_or_merge_config(
+                    None,
+                    platform=platform,
+                    arch=arch,
+                    variant_config_files=[cbc_path],
+                )
+                cbc, _ = conda_build.variants.get_package_combined_spec(
+                    recipe_dir,
+                    config=config,
+                )
+            except Exception:
+                if att == 0:
+                    pass
+                else:
+                    raise
 
-    # now we render the meta.yaml into an actual recipe
-    metas = conda_build.api.render(
-        recipe_dir,
-        platform=platform,
-        arch=arch,
-        ignore_system_variants=True,
-        variants=cbc,
-        permit_undefined_jinja=True,
-        finalize=False,
-        bypass_env_check=True,
-        channel_urls=channel_sources,
-    )
+        # now we render the meta.yaml into an actual recipe
+        metas = conda_build.api.render(
+            recipe_dir,
+            platform=platform,
+            arch=arch,
+            ignore_system_variants=True,
+            variants=cbc,
+            permit_undefined_jinja=True,
+            finalize=False,
+            bypass_env_check=True,
+            channel_urls=channel_sources,
+        )
 
     # get build info
     if build_platform_arch is not None:
@@ -869,17 +982,18 @@ def _is_recipe_solvable_on_platform(
 
     # now we loop through each one and check if we can solve it
     # we check run and host and ignore the rest
-    logger.debug("getting mamba solver")
-    solver = _mamba_factory(tuple(channel_sources), f"{platform}-{arch}")
-    build_solver = _mamba_factory(
-        tuple(channel_sources),
-        f"{build_platform}-{build_arch}",
-    )
+    print_debug("getting mamba solver")
+    with suppress_conda_build_logging():
+        solver = _mamba_factory(tuple(channel_sources), f"{platform}-{arch}")
+        build_solver = _mamba_factory(
+            tuple(channel_sources),
+            f"{build_platform}-{build_arch}",
+        )
     solvable = True
     errors = []
     outnames = [m.name() for m, _, _ in metas]
     for m, _, _ in metas:
-        logger.debug("checking recipe %s", m.name())
+        print_debug("checking recipe %s", m.name())
 
         build_req = m.get_value("requirements/build", [])
         host_req = m.get_value("requirements/host", [])
@@ -952,8 +1066,8 @@ def _is_recipe_solvable_on_platform(
             if _err is not None:
                 errors.append(_err)
 
-    logger.info("RUN EXPORT cache status: %s", _get_run_export.cache_info())
-    logger.info(
+    print_info("RUN EXPORT CACHE STATUS: %s", _get_run_export.cache_info())
+    print_info(
         "MAMBA SOLVER MEM USAGE: %d MB",
         psutil.Process().memory_info().rss // 1024**2,
     )

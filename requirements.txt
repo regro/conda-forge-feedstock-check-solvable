@@ -9,3 +9,4 @@ conda-build
 mamba>=0.23
 ruamel.yaml.jinja2
 conda-forge-metadata>=0.2.0
+wurlitzer
