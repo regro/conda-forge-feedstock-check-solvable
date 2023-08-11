@@ -11,7 +11,6 @@ https://gist.github.com/wolfv/cd12bd4a448c77ff02368e97ffdf495a.
 """
 import rapidjson as json
 import os
-import logging
 import glob
 import functools
 import pathlib
@@ -46,8 +45,6 @@ from conda_forge_metadata.artifact_info import (
 
 PACKAGE_CACHE = api.MultiPackageCache(pkgs_dirs)
 
-logger = logging.getLogger("conda_forge_tick.mamba_solver")
-
 DEFAULT_RUN_EXPORTS = {
     "weak": set(),
     "strong": set(),
@@ -74,6 +71,34 @@ ALL_PLATFORMS = {
     "osx-arm64",
     "win-64",
 }
+
+# I cannot get python logging to work correctly with all of the hacks to
+# make conda-build be quiet.
+# so these env vars are a thing now
+if "CONDA_FORGE_FEEDSTOCK_CHECK_SOLVABLE_DEBUG" in os.environ:
+    PRINT_DEBUG = True
+else:
+    PRINT_DEBUG = False
+
+if "CONDA_FORGE_FEEDSTOCK_CHECK_SOLVABLE_QUIET" in os.environ:
+    QUIET = True
+else:
+    QUIET = False
+
+
+def print_local(fmt, *args, debug=False):
+    if QUIET:
+        pass
+    else:
+        if debug:
+            if PRINT_DEBUG:
+                print("DEBUG:" + __name__ + ":" + fmt % args, flush=True)
+        else:
+            print("INFO:" + __name__ + ":" + fmt % args, flush=True)
+
+
+def print_debug(fmt, *args):
+    print_local(fmt, *args, debug=True)
 
 
 @contextlib.contextmanager
@@ -240,12 +265,12 @@ class FakeRepoData:
         for subdir in all_subdirs:
             self._write_subdir(subdir)
 
-        logger.info("Wrote fake repodata to %s", self.base_path)
+        print_debug("Wrote fake repodata to %s", self.base_path)
         import glob
 
         for filename in glob.iglob(str(self.base_path / "**"), recursive=True):
-            logger.info(filename)
-        logger.info("repo: %s", self.channel_url)
+            print_debug(filename)
+        print_debug("repo: %s", self.channel_url)
 
     def __enter__(self):
         return self
@@ -284,7 +309,7 @@ def _get_run_export_download(link_tuple):
 
             for key in DEFAULT_RUN_EXPORTS:
                 if key in run_exports:
-                    logger.debug(
+                    print_debug(
                         "RUN EXPORT: %s %s %s",
                         pkg,
                         key,
@@ -326,8 +351,7 @@ def _get_run_export(link_tuple):
     else:
         channel_url = link_tuple[0].rsplit("/", maxsplit=1)[0]
 
-    with suppress_conda_build_logging():
-        cd = download_channeldata(channel_url)
+    cd = download_channeldata(channel_url)
     data = json.loads(link_tuple[2])
     name = data["name"]
 
@@ -351,7 +375,7 @@ def _get_run_export(link_tuple):
 
                 for k in rx:
                     if k in DEFAULT_RUN_EXPORTS:
-                        logger.debug(
+                        print_debug(
                             "RUN EXPORT: %s %s %s",
                             name,
                             k,
@@ -359,7 +383,7 @@ def _get_run_export(link_tuple):
                         )
                         run_exports[k].update(rx[k])
                     else:
-                        logger.debug(
+                        print_debug(
                             "RUN EXPORT: %s %s %s",
                             name,
                             "weak",
@@ -369,7 +393,7 @@ def _get_run_export(link_tuple):
 
         # fall back to getting repodata shard if needed
         if run_exports is None:
-            logger.info(
+            print_local(
                 "RUN EXPORTS: downloading package %s/%s/%s"
                 % (channel_url, link_tuple[0].split("/")[-1], link_tuple[1]),
             )
@@ -452,14 +476,14 @@ class MambaSolver:
 
         _specs = [_norm_spec(s) for s in specs]
 
-        logger.debug("MAMBA running solver for specs \n\n%s\n", pprint.pformat(_specs))
+        print_debug("MAMBA running solver for specs \n\n%s\n", pprint.pformat(_specs))
 
         solver.add_jobs(_specs, api.SOLVER_INSTALL)
         success = solver.solve()
 
         err = None
         if not success:
-            logger.warning(
+            print_local(
                 "MAMBA failed to solve specs \n\n%s\n\nfor channels "
                 "\n\n%s\n\nThe reported errors are:\n\n%s\n",
                 pprint.pformat(_specs),
@@ -484,7 +508,7 @@ class MambaSolver:
                 )
 
             if get_run_exports:
-                logger.debug(
+                print_debug(
                     "MAMBA getting run exports for \n\n%s\n",
                     pprint.pformat(solution),
                 )
@@ -706,7 +730,7 @@ def is_recipe_solvable(
                     {},
                 )
         else:
-            logger.warning("MAMBA SOLVER TIMEOUT for %s", feedstock_dir)
+            print_local("MAMBA SOLVER TIMEOUT for %s", feedstock_dir)
             res = (
                 True,
                 [],
@@ -752,7 +776,7 @@ def _is_recipe_solvable(
             "results in no builds for a recipe (e.g., a recipe is python 2.7 only). "
             "This attempted migration is being reported as not solvable.",
         )
-        logger.warning(errors[-1])
+        print_local(errors[-1])
         return False, errors, {}
 
     if not os.path.exists(os.path.join(feedstock_dir, "recipe", "meta.yaml")):
@@ -760,9 +784,10 @@ def _is_recipe_solvable(
             "No `recipe/meta.yaml` file found! This issue is quite weird and "
             "someone should investigate!",
         )
-        logger.warning(errors[-1])
+        print_local(errors[-1])
         return False, errors, {}
 
+    print_local("CHECKING FEEDSTOCK: %s", os.path.basename(feedstock_dir))
     solvable = True
     solvable_by_cbc = {}
     for cbc_fname in cbcs:
@@ -779,18 +804,17 @@ def _is_recipe_solvable(
         if arch not in ["32", "aarch64", "ppc64le", "armv7l", "arm64"]:
             arch = "64"
 
-        logger.info("CHECKING RECIPE SOLVABLE: %s", os.path.basename(cbc_fname))
-        with suppress_conda_build_logging():
-            _solvable, _errors = _is_recipe_solvable_on_platform(
-                os.path.join(feedstock_dir, "recipe"),
-                cbc_fname,
-                platform,
-                arch,
-                build_platform_arch=(
-                    build_platform.get(f"{platform}_{arch}", f"{platform}_{arch}")
-                ),
-                additional_channels=additional_channels,
-            )
+        print_local("CHECKING RECIPE SOLVABLE: %s", os.path.basename(cbc_fname))
+        _solvable, _errors = _is_recipe_solvable_on_platform(
+            os.path.join(feedstock_dir, "recipe"),
+            cbc_fname,
+            platform,
+            arch,
+            build_platform_arch=(
+                build_platform.get(f"{platform}_{arch}", f"{platform}_{arch}")
+            ),
+            additional_channels=additional_channels,
+        )
         solvable = solvable and _solvable
         cbc_name = os.path.basename(cbc_fname).rsplit(".", maxsplit=1)[0]
         errors.extend([f"{cbc_name}: {e}" for e in _errors])
@@ -868,7 +892,7 @@ def _is_recipe_solvable_on_platform(
     if additional_channels:
         channel_sources = list(additional_channels) + channel_sources
 
-    logger.debug(
+    print_debug(
         "MAMBA: using channels %s on platform-arch %s-%s",
         channel_sources,
         platform,
@@ -877,40 +901,41 @@ def _is_recipe_solvable_on_platform(
 
     # here we extract the conda build config in roughly the same way that
     # it would be used in a real build
-    logger.debug("rendering recipe with conda build")
+    print_debug("rendering recipe with conda build")
 
-    for att in range(2):
-        try:
-            if att == 1:
-                os.system("rm -f %s/conda_build_config.yaml" % recipe_dir)
-            config = conda_build.config.get_or_merge_config(
-                None,
-                platform=platform,
-                arch=arch,
-                variant_config_files=[cbc_path],
-            )
-            cbc, _ = conda_build.variants.get_package_combined_spec(
-                recipe_dir,
-                config=config,
-            )
-        except Exception:
-            if att == 0:
-                pass
-            else:
-                raise
+    with suppress_conda_build_logging():
+        for att in range(2):
+            try:
+                if att == 1:
+                    os.system("rm -f %s/conda_build_config.yaml" % recipe_dir)
+                config = conda_build.config.get_or_merge_config(
+                    None,
+                    platform=platform,
+                    arch=arch,
+                    variant_config_files=[cbc_path],
+                )
+                cbc, _ = conda_build.variants.get_package_combined_spec(
+                    recipe_dir,
+                    config=config,
+                )
+            except Exception:
+                if att == 0:
+                    pass
+                else:
+                    raise
 
-    # now we render the meta.yaml into an actual recipe
-    metas = conda_build.api.render(
-        recipe_dir,
-        platform=platform,
-        arch=arch,
-        ignore_system_variants=True,
-        variants=cbc,
-        permit_undefined_jinja=True,
-        finalize=False,
-        bypass_env_check=True,
-        channel_urls=channel_sources,
-    )
+        # now we render the meta.yaml into an actual recipe
+        metas = conda_build.api.render(
+            recipe_dir,
+            platform=platform,
+            arch=arch,
+            ignore_system_variants=True,
+            variants=cbc,
+            permit_undefined_jinja=True,
+            finalize=False,
+            bypass_env_check=True,
+            channel_urls=channel_sources,
+        )
 
     # get build info
     if build_platform_arch is not None:
@@ -920,17 +945,18 @@ def _is_recipe_solvable_on_platform(
 
     # now we loop through each one and check if we can solve it
     # we check run and host and ignore the rest
-    logger.debug("getting mamba solver")
-    solver = _mamba_factory(tuple(channel_sources), f"{platform}-{arch}")
-    build_solver = _mamba_factory(
-        tuple(channel_sources),
-        f"{build_platform}-{build_arch}",
-    )
+    print_debug("getting mamba solver")
+    with suppress_conda_build_logging():
+        solver = _mamba_factory(tuple(channel_sources), f"{platform}-{arch}")
+        build_solver = _mamba_factory(
+            tuple(channel_sources),
+            f"{build_platform}-{build_arch}",
+        )
     solvable = True
     errors = []
     outnames = [m.name() for m, _, _ in metas]
     for m, _, _ in metas:
-        logger.debug("checking recipe %s", m.name())
+        print_debug("checking recipe %s", m.name())
 
         build_req = m.get_value("requirements/build", [])
         host_req = m.get_value("requirements/host", [])
@@ -967,12 +993,13 @@ def _is_recipe_solvable_on_platform(
 
         if host_req:
             host_req = _clean_reqs(host_req, outnames)
-            _solvable, _err, host_req, host_rx = solver.solve(
-                host_req,
-                get_run_exports=True,
-                ignore_run_exports_from=ign_runex_from,
-                ignore_run_exports=ign_runex,
-            )
+            with suppress_conda_build_logging():
+                _solvable, _err, host_req, host_rx = solver.solve(
+                    host_req,
+                    get_run_exports=True,
+                    ignore_run_exports_from=ign_runex_from,
+                    ignore_run_exports=ign_runex,
+                )
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
@@ -986,7 +1013,8 @@ def _is_recipe_solvable_on_platform(
         if run_req:
             run_req = apply_pins(run_req, host_req or [], build_req or [], outnames, m)
             run_req = _clean_reqs(run_req, outnames)
-            _solvable, _err, _ = solver.solve(run_req)
+            with suppress_conda_build_logging():
+                _solvable, _err, _ = solver.solve(run_req)
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
@@ -998,13 +1026,14 @@ def _is_recipe_solvable_on_platform(
         )
         if tst_req:
             tst_req = _clean_reqs(tst_req, outnames)
-            _solvable, _err, _ = solver.solve(tst_req)
+            with suppress_conda_build_logging():
+                _solvable, _err, _ = solver.solve(tst_req)
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
 
-    logger.info("RUN EXPORT cache status: %s", _get_run_export.cache_info())
-    logger.info(
+    print_local("RUN EXPORT CACHE STATUS: %s", _get_run_export.cache_info())
+    print_local(
         "MAMBA SOLVER MEM USAGE: %d MB",
         psutil.Process().memory_info().rss // 1024**2,
     )
