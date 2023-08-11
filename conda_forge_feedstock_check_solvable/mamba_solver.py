@@ -505,13 +505,8 @@ def virtual_package_repodata():
     repodata = FakeRepoData(tmp_path)
 
     # glibc
-    fake_packages = [
-        FakePackage("__glibc", "2.12"),
-        FakePackage("__glibc", "2.17"),
-        FakePackage("__glibc", "2.28"),
-    ]
-    for pkg in fake_packages:
-        repodata.add_package(pkg)
+    for glibc_minor in range(12, 51):
+        repodata.add_package(FakePackage("__glibc", "2.%d" % glibc_minor))
 
     # cuda - get from cuda-version on conda-forge
     cuda_pkgs = json.loads(
@@ -562,37 +557,14 @@ def virtual_package_repodata():
         "10.16",
     ]:
         repodata.add_package(FakePackage("__osx", osx_ver), subdirs=["osx-64"])
-    for osx_ver in [
-        "11.0",
-        "11.0.1",
-        "11.1",
-        "11.2",
-        "11.2.1",
-        "11.2.2",
-        "11.2.3",
-        "11.3",
-        "11.4",
-        "11.5",
-        "12.0.1",
-        "12.1",
-        "12.2",
-        "12.3",
-        "12.4",
-        "12.5",
-        "13.0",
-        "13.1",
-        "13.2",
-        "13.3",
-        "13.4",
-        "13.5",
-        "13.6",
-        "13.7",
-        "13.8",
-    ]:
-        repodata.add_package(
-            FakePackage("__osx", osx_ver),
-            subdirs=["osx-64", "osx-arm64"],
-        )
+    for osx_major in range(11, 17):
+        for osx_minor in range(0, 17):
+            osx_ver = "%d.%d" % (osx_major, osx_minor)
+            repodata.add_package(
+                FakePackage("__osx", osx_ver),
+                subdirs=["osx-64", "osx-arm64"],
+            )
+
     repodata.add_package(
         FakePackage("__win", "0"),
         subdirs=list(subdir for subdir in ALL_PLATFORMS if subdir.startswith("win")),
