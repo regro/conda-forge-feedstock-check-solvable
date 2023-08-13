@@ -11,6 +11,8 @@ https://gist.github.com/wolfv/cd12bd4a448c77ff02368e97ffdf495a.
 """
 import rapidjson as json
 import os
+import traceback
+import io
 import glob
 import functools
 import pathlib
@@ -42,6 +44,7 @@ from conda_build.utils import download_channeldata
 from conda_forge_metadata.artifact_info import (
     get_artifact_info_as_json,
 )
+
 
 PACKAGE_CACHE = api.MultiPackageCache(pkgs_dirs)
 
@@ -131,6 +134,8 @@ def suppress_conda_build_logging():
     else:
         suppress = True
 
+    outerr = io.StringIO()
+
     if not suppress:
         try:
             yield None
@@ -160,8 +165,13 @@ loggers:
 """)
             conda_build.conda_interface.cc_conda_build["log_config_file"] = config_file
 
-            with wurlitzer.pipes():
+            with wurlitzer.pipes(stdout=outerr, stderr=wurlitzer.STDOUT):
                 yield None
+
+    except Exception as e:
+        print("EXCEPTION: captured C-level I/O: %r" % outerr.getvalue(), flush=True)
+        traceback.print_exc()
+        raise e
     finally:
         if old_val is not None:
             conda_build.conda_interface.cc_conda_build["log_config_file"] = old_val
@@ -516,6 +526,7 @@ class MambaSolver:
             run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
         else:
             t = api.Transaction(
+                self.pool,
                 solver,
                 PACKAGE_CACHE,
             )
@@ -955,11 +966,11 @@ def _is_recipe_solvable_on_platform(
                     recipe_dir,
                     config=config,
                 )
-            except Exception:
+            except Exception as e:
                 if att == 0:
                     pass
                 else:
-                    raise
+                    raise e
 
         # now we render the meta.yaml into an actual recipe
         metas = conda_build.api.render(
