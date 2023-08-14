@@ -613,5 +613,5 @@ python_impl:
 
 if __name__ == "__main__":
     pth = os.path.join(os.path.dirname(__file__), "xgboost-feedstock")
-    assert is_recipe_solvable(pth, timeout=None, verbosity=1)[0]
-    assert is_recipe_solvable(pth, verbosity=1)[0]
+    assert is_recipe_solvable(pth, timeout=None, verbosity=2)[0]
+    assert is_recipe_solvable(pth, verbosity=2)[0]
