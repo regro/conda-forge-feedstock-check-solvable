@@ -127,8 +127,6 @@ def print_debug(fmt, *args):
 
 @contextlib.contextmanager
 def suppress_conda_build_logging():
-    import conda_build.conda_interface
-    old_val = conda_build.conda_interface.cc_conda_build.get("log_config_file")
     if "CONDA_FORGE_FEEDSTOCK_CHECK_SOLVABLE_DEBUG" in os.environ:
         suppress = False
     else:
@@ -144,27 +142,9 @@ def suppress_conda_build_logging():
         return
 
     try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_file = os.path.join(tmpdir, "logging.yaml")
-            with open(config_file, "w") as fp:
-                fp.write("""\
-version: 1
-loggers:
-    conda_build.api:
-        level: CRITICAL
-    conda_build.config:
-        level: CRITICAL
-    conda_build.metadata:
-        level: CRITICAL
-    conda_build.variants:
-        level: CRITICAL
-    urllib3:
-        level: CRITICAL
-    urllib3.connectionpool:
-        level: CRITICAL
-""")
-            conda_build.conda_interface.cc_conda_build["log_config_file"] = config_file
-
+        fout = io.StringIO()
+        ferr = io.StringIO()
+        with contextlib.redirect_stdout(fout), contextlib.redirect_stderr(ferr):
             with wurlitzer.pipes(stdout=outerr, stderr=wurlitzer.STDOUT):
                 yield None
 
@@ -173,11 +153,7 @@ loggers:
         traceback.print_exc()
         raise e
     finally:
-        if old_val is not None:
-            conda_build.conda_interface.cc_conda_build["log_config_file"] = old_val
-        else:
-            if "log_config_file" in conda_build.conda_interface.cc_conda_build:
-                del conda_build.conda_interface.cc_conda_build["log_config_file"]
+        pass
 
 
 def _munge_req_star(req):
