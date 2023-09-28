@@ -906,7 +906,10 @@ def _is_recipe_solvable_on_platform(
         cbc_cfg = parser.load(fp.read())
 
     if "channel_sources" in cbc_cfg:
-        channel_sources = cbc_cfg["channel_sources"][0].split(",")
+        channel_sources = []
+        for source in cbc_cfg["channel_sources"]:
+            # channel_sources might be part of some zip_key
+            channel_sources.extend([c.strip() for c in source.split(",")])
     else:
         channel_sources = ["conda-forge", "defaults", "msys2"]
 
