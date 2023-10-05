@@ -495,9 +495,9 @@ class MambaSolver:
                 "\n\n%s\n\nThe reported errors are:\n\n%s\n",
                 pprint.pformat(_specs),
                 pprint.pformat(self.channels),
-                solver.problems_to_str(),
+                solver.explain_problems(),
             )
-            err = solver.problems_to_str()
+            err = solver.explain_problems()
             solution = None
             run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
         else:
