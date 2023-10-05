@@ -417,13 +417,13 @@ class MambaSolver:
     Parameters
     ----------
     channels : list of str
-        A list of the channels (e.g., `[conda-forge/linux-64]`, etc.)
+        A list of the channels (e.g., `[conda-forge]`, etc.)
     platform : str
         The platform to be used (e.g., `linux-64`).
 
     Example
     -------
-    >>> solver = MambaSolver(['conda-forge/linux-64', 'conda-forge/noarch'], "linux-64")
+    >>> solver = MambaSolver(['conda-forge', 'conda-forge'], "linux-64")
     >>> solver.solve(["xtensor 0.18"])
     """
 
