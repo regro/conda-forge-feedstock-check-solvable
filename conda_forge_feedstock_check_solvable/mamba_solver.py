@@ -441,13 +441,13 @@ class MambaSolver:
     Parameters
     ----------
     channels : list of str
-        A list of the channels (e.g., `[conda-forge/linux-64]`, etc.)
+        A list of the channels (e.g., `[conda-forge]`, etc.)
     platform : str
         The platform to be used (e.g., `linux-64`).
 
     Example
     -------
-    >>> solver = MambaSolver(['conda-forge/linux-64', 'conda-forge/noarch'], "linux-64")
+    >>> solver = MambaSolver(['conda-forge', 'conda-forge'], "linux-64")
     >>> solver.solve(["xtensor 0.18"])
     """
 
@@ -519,9 +519,9 @@ class MambaSolver:
                 "\n\n%s\n\nThe reported errors are:\n\n%s\n",
                 pprint.pformat(_specs),
                 pprint.pformat(self.channels),
-                solver.problems_to_str(),
+                solver.explain_problems(),
             )
-            err = solver.problems_to_str()
+            err = solver.explain_problems()
             solution = None
             run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
         else:
@@ -930,7 +930,10 @@ def _is_recipe_solvable_on_platform(
         cbc_cfg = parser.load(fp.read())
 
     if "channel_sources" in cbc_cfg:
-        channel_sources = cbc_cfg["channel_sources"][0].split(",")
+        channel_sources = []
+        for source in cbc_cfg["channel_sources"]:
+            # channel_sources might be part of some zip_key
+            channel_sources.extend([c.strip() for c in source.split(",")])
     else:
         channel_sources = ["conda-forge", "defaults", "msys2"]
 
