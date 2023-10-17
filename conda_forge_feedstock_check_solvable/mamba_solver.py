@@ -356,7 +356,7 @@ def _get_run_export(link_tuple):
     """
     Given a tuple of (channel, file, json repodata) as returned by libmamba solver,
     fetch the run exports for the artifact. There are several possible sources:
-    
+
     1. CEP-12 run_exports.json file served in the channel/subdir (next to repodata.json)
     2. conda-forge-metadata fetchers (libcgraph, oci, etc)
     3. The full artifact (conda or tar.bz2) as a last resort
@@ -385,8 +385,8 @@ def _get_run_export(link_tuple):
         if filename.endswith(".conda"):
             rx = run_exports_json.get("packages.conda", {}).get(filename, {})
         else:
-            rx = run_exports_json.get("packages", {}).get(filename, {})    
-    
+            rx = run_exports_json.get("packages", {}).get(filename, {})
+
     # Second source: conda-forge-metadata fetchers
     if not rx:
         cd = download_channeldata(channel_url)
@@ -398,8 +398,9 @@ def _get_run_export(link_tuple):
                 backend="libcfgraph",
             )
             if artifact_data is not None:
-                rx = artifact_data.get("rendered_recipe", {}).get("build", {}).get("run_exports", {})
-    
+                rx = artifact_data.get("rendered_recipe", {}).get(
+                        "build", {}).get("run_exports", {})
+
             # Third source: download from the full artifact
             if not rx:
                 print_info(
