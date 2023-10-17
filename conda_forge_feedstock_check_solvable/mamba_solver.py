@@ -41,6 +41,9 @@ from mamba.utils import load_channels
 from conda_build.conda_interface import pkgs_dirs
 from conda_build.utils import download_channeldata
 
+import requests
+import zstandard as zstd
+
 from conda_forge_metadata.artifact_info import (
     get_artifact_info_as_json,
 )
@@ -342,13 +345,23 @@ def _strip_anaconda_tokens(url):
         return url
 
 
+def _fetch_json_zst(url):
+    ...
+
+
 @functools.lru_cache(maxsize=10240)
 def _get_run_export(link_tuple):
-
-    run_exports = None
-
-    if "https://" in link_tuple[0]:
-        https = _strip_anaconda_tokens(link_tuple[0])
+    """
+    Given a tuple of (channel, file, json repodata) as returned by libmamba solver,
+    fetch the run exports for the artifact. There are several possible sources:
+    
+    1. CEP-12 run_exports.json file served in the channel/subdir (next to repodata.json)
+    2. conda-forge-metadata fetchers (libcgraph, oci, etc)
+    3. The full artifact (conda or tar.bz2) as a last resort
+    """
+    full_channel_url, filename, json_payload = link_tuple
+    if "https://" in full_channel_url:
+        https = _strip_anaconda_tokens(full_channel_url)
         channel_url = https.rsplit("/", maxsplit=1)[0]
         if "conda.anaconda.org" in channel_url:
             channel_url = channel_url.replace(
@@ -356,57 +369,68 @@ def _get_run_export(link_tuple):
                 "conda-static.anaconda.org",
             )
     else:
-        channel_url = link_tuple[0].rsplit("/", maxsplit=1)[0]
+        channel_url = full_channel_url.rsplit("/", maxsplit=1)[0]
 
-    cd = download_channeldata(channel_url)
-    data = json.loads(link_tuple[2])
+    channel = full_channel_url.split("/")[-2:][0]
+    subdir = full_channel_url.split("/")[-2:][1]
+    data = json.loads(json_payload)
     name = data["name"]
+    rx = {}
 
-    if cd.get("packages", {}).get(name, {}).get("run_exports", {}):
-        data = get_artifact_info_as_json(
-            link_tuple[0].split("/")[-2:][0],  # channel
-            link_tuple[0].split("/")[-2:][1],  # subdir
-            link_tuple[1],  # package
-        )
-
-        if data is not None:
-            rx = data.get("rendered_recipe", {}).get("build", {}).get("run_exports", {})
-            if rx:
-                run_exports = copy.deepcopy(
-                    DEFAULT_RUN_EXPORTS,
-                )
-                if isinstance(rx, str):
-                    # some packages have a single string
-                    # eg pyqt
-                    rx = [rx]
-
-                for k in rx:
-                    if k in DEFAULT_RUN_EXPORTS:
-                        print_debug(
-                            "RUN EXPORT: %s %s %s",
-                            name,
-                            k,
-                            rx[k],
-                        )
-                        run_exports[k].update(rx[k])
-                    else:
-                        print_debug(
-                            "RUN EXPORT: %s %s %s",
-                            name,
-                            "weak",
-                            [k],
-                        )
-                        run_exports["weak"].add(k)
-
-        # fall back to getting repodata shard if needed
-        if run_exports is None:
-            print_info(
-                "RUN EXPORTS: downloading package %s/%s/%s"
-                % (channel_url, link_tuple[0].split("/")[-1], link_tuple[1]),
+    # First source: CEP-12 run_exports.json
+    run_exports_json = _fetch_json_zst(f"{channel_url}/{subdir}/run_exports.json.zst")
+    if run_exports_json:
+        if filename.endswith(".conda"):
+            rx = run_exports_json.get("packages.conda", {}).get(filename, {})
+        else:
+            rx = run_exports_json.get("packages", {}).get(filename, {})    
+    
+    # Second source: conda-forge-metadata fetchers
+    if not rx:
+        cd = download_channeldata(channel_url)
+        if cd.get("packages", {}).get(name, {}).get("run_exports", {}):
+            artifact_data = get_artifact_info_as_json(
+                channel,
+                subdir,
+                filename,
+                backend="libcfgraph",
             )
-            run_exports = _get_run_export_download(link_tuple)[1]
-    else:
-        run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
+            if artifact_data is not None:
+                rx = artifact_data.get("rendered_recipe", {}).get("build", {}).get("run_exports", {})
+    
+            # Third source: download from the full artifact
+            if not rx:
+                print_info(
+                    "RUN EXPORTS: downloading package %s/%s/%s"
+                    % (channel_url, subdir, link_tuple[1]),
+                )
+                rx = _get_run_export_download(link_tuple)[1]
+
+    # Sanitize run_exports data
+    run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
+    if rx:
+        if isinstance(rx, str):
+            # some packages have a single string
+            # eg pyqt
+            rx = [rx]
+
+        for k in rx:
+            if k in DEFAULT_RUN_EXPORTS:
+                print_debug(
+                    "RUN EXPORT: %s %s %s",
+                    name,
+                    k,
+                    rx[k],
+                )
+                run_exports[k].update(rx[k])
+            else:
+                print_debug(
+                    "RUN EXPORT: %s %s %s",
+                    name,
+                    "weak",
+                    [k],
+                )
+                run_exports["weak"].add(k)
 
     return run_exports
 
