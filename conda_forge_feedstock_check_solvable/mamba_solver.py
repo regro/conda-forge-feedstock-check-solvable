@@ -385,9 +385,10 @@ def _get_run_export(link_tuple):
     run_exports_json = _fetch_json_zst(f"{channel_url}/{subdir}/run_exports.json.zst")
     if run_exports_json:
         if filename.endswith(".conda"):
-            rx = run_exports_json.get("packages.conda", {}).get(filename, {})
+            pkgs = run_exports_json.get("packages.conda", {})
         else:
-            rx = run_exports_json.get("packages", {}).get(filename, {})
+            pkgs = run_exports_json.get("packages.conda", {})
+        rx = pkgs.get(filename, {}).get("run_exports", {})
 
     # Second source: conda-forge-metadata fetchers
     if not rx:
