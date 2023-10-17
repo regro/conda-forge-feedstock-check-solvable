@@ -346,7 +346,9 @@ def _strip_anaconda_tokens(url):
 
 
 def _fetch_json_zst(url):
-    ...
+    res = requests.get(url)
+    binary = res.content
+    return zstd.decompress(binary)
 
 
 @functools.lru_cache(maxsize=10240)
