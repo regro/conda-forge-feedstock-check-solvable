@@ -347,7 +347,11 @@ def _strip_anaconda_tokens(url):
 
 @functools.cache
 def _fetch_json_zst(url):
-    res = requests.get(url)
+    try:
+        res = requests.get(url)
+    except requests.RequestException:
+        # If the URL is invalid return None
+        return None
     compressed_binary = res.content
     binary = zstd.decompress(compressed_binary)
     return json.loads(binary.decode("utf-8"))
