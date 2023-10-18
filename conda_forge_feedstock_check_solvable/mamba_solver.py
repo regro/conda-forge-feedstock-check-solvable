@@ -42,7 +42,7 @@ from conda_build.conda_interface import pkgs_dirs
 from conda_build.utils import download_channeldata
 
 import requests
-import zstandard as zstd
+import zstandard
 
 from conda_forge_metadata.artifact_info import (
     get_artifact_info_as_json,
@@ -353,7 +353,7 @@ def _fetch_json_zst(url):
         # If the URL is invalid return None
         return None
     compressed_binary = res.content
-    binary = zstd.decompress(compressed_binary)
+    binary = zstandard.decompress(compressed_binary)
     return json.loads(binary.decode("utf-8"))
 
 
