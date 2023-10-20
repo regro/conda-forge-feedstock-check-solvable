@@ -391,7 +391,7 @@ def _get_run_export(link_tuple):
         if filename.endswith(".conda"):
             pkgs = run_exports_json.get("packages.conda", {})
         else:
-            pkgs = run_exports_json.get("packages.conda", {})
+            pkgs = run_exports_json.get("packages", {})
         rx = pkgs.get(filename, {}).get("run_exports", {})
 
     # Second source: conda-forge-metadata fetchers
