@@ -1,6 +1,7 @@
 # Copyright (C) 2019, QuantStack
 # SPDX-License-Identifier: BSD-3-Clause
 # Copied from mamba 1.5.2
+# flake8: noqa
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
