@@ -12,3 +12,4 @@ conda-forge-metadata>=0.2.0
 wurlitzer
 requests
 zstandard
+boltons >=23.0.0
