@@ -10,3 +10,4 @@ mamba>=1.5.1
 ruamel.yaml.jinja2
 conda-forge-metadata>=0.2.0
 wurlitzer
+py-rattler
