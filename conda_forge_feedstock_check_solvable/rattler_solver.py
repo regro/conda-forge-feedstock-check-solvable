@@ -1,19 +1,21 @@
-import contextlib
+import copy
 import functools
 import glob
-import io
-import json
+import pprint
+import tempfile
+from typing import List
+import rapidjson as json
 import os
 import subprocess
-import traceback
-import wurlitzer
 import conda_build.config
 import conda_build.api
 import conda_build.variants
 import asyncio
+import conda_package_handling.api
 
 from ruamel.yaml import YAML
 from rattler import (
+    RepoDataRecord,
     solve,
     fetch_repo_data,
     Channel,
@@ -24,114 +26,209 @@ from rattler import (
     Version,
 )
 
-VERBOSITY = 1
-VERBOSITY_PREFIX = {
-    0: "CRITICAL",
-    1: "WARNING",
-    2: "INFO",
-    3: "DEBUG",
-}
-MAX_GLIBC_MINOR = 50
+from conda_build.utils import download_channeldata
+from conda_forge_metadata.artifact_info import (
+    get_artifact_info_as_json,
+)
+
+from .utils import (
+    DEFAULT_RUN_EXPORTS,
+    MAX_GLIBC_MINOR,
+    _clean_reqs,
+    _get_run_export,
+    apply_pins,
+    print_debug,
+    print_info,
+    print_warning,
+    suppress_conda_build_logging,
+)
 
 
-def _clean_reqs(reqs, names):
-    reqs = [r for r in reqs if not any(r.split(" ")[0] == nm for nm in names)]
-    return reqs
+class RattlerSolver:
+    def __init__(self, available_packages, virtual_packages) -> None:
+        self.available_packages = available_packages
+        self.virtual_packages = virtual_packages
 
+    def solve(
+        self,
+        specs: List[str],
+        get_run_exports: bool = False,
+        ignore_run_exports_from: List[str] = None,
+        ignore_run_exports: List[str] = None,
+    ):
+        ignore_run_exports_from = ignore_run_exports_from or []
+        ignore_run_exports = ignore_run_exports or []
+        success = False
+        run_exports = []
 
-def _filter_problematic_reqs(reqs):
-    """There are some reqs that have issues when used in certain contexts"""
-    problem_reqs = {
-        # This causes a strange self-ref for arrow-cpp
-        "parquet-cpp",
-    }
-    reqs = [r for r in reqs if r.split(" ")[0] not in problem_reqs]
-    return reqs
+        _specs = [MatchSpec(s) for s in specs]
+        _ignore_run_exports = [MatchSpec(igr) for igr in ignore_run_exports]
+        _ignore_run_exports_from = [MatchSpec(igrf) for igrf in ignore_run_exports_from]
 
-
-def apply_pins(reqs, host_req, build_req, outnames, m):
-    from conda_build.render import get_pin_from_build
-
-    pin_deps = host_req if m.is_cross else build_req
-
-    full_build_dep_versions = {
-        dep.split()[0]: " ".join(dep.split()[1:])
-        for dep in _clean_reqs(pin_deps, outnames)
-    }
-
-    pinned_req = []
-    for dep in reqs:
         try:
-            pinned_req.append(
-                get_pin_from_build(m, dep, full_build_dep_versions),
+            print_debug(
+                "RATTLER running solver for specs \n\n%s\n", pprint.pformat(_specs)
             )
-        except Exception:
-            # in case we couldn't apply pins for whatever
-            # reason, fall back to the req
-            pinned_req.append(dep)
+            solution = solve(
+                specs=specs,
+                available_packages=self.available_packages,
+                virtual_packages=self.virtual_packages,
+            )
+            success = True
 
-    pinned_req = _filter_problematic_reqs(pinned_req)
-    return pinned_req
+            if get_run_exports:
+                run_exports = self._get_run_exports(
+                    solution, _specs, _ignore_run_exports_from, _ignore_run_exports
+                )
 
+        except Exception as e:
+            err = str(e)
+            print_warning(
+                "RATTLER failed to solve specs \n\n%s\n\nfor channels "
+                "\n\n%s\n\nThe reported errors are:\n\n%s\n",
+                pprint.pformat(_specs),
+                pprint.pformat(self.channels),
+            )
+            success = False
+            run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
 
-def print_verb(fmt, *args, verbosity=0):
-    from inspect import currentframe, getframeinfo
-
-    frameinfo = getframeinfo(currentframe())
-
-    if verbosity <= VERBOSITY:
-        if args:
-            msg = fmt % args
+        if get_run_exports:
+            return success, err, solution, run_exports
         else:
-            msg = fmt
-        print(
-            VERBOSITY_PREFIX[verbosity]
-            + ":"
-            + __name__
-            + ":"
-            + "%d" % frameinfo.lineno
-            + ":"
-            + msg,
-            flush=True,
+            return success, err, solution, None
+
+    def _get_run_exports(
+        self,
+        repodata_records: List[RepoDataRecord],
+        _specs: List[MatchSpec],
+        ignore_run_exports_from: List[MatchSpec],
+        ignore_run_exports: List[MatchSpec],
+    ):
+        """
+        Produce a dict with the weak and strong run exports for the packages.
+        We only look up export data for things explicitly listed in the original
+        specs.
+        """
+        names = {MatchSpec(s).name for s in _specs}
+        ign_rex_from = {MatchSpec(s).name for s in ignore_run_exports_from}
+        ign_rex = {MatchSpec(s).name for s in ignore_run_exports}
+        run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
+        for record in repodata_records:
+            lt_name = record.name
+            if lt_name in names and lt_name not in ign_rex_from:
+                rx = _get_run_export(record)
+                for key in rx:
+                    rx[key] = {v for v in rx[key] if v not in ign_rex}
+                for key in DEFAULT_RUN_EXPORTS:
+                    run_exports[key] |= rx[key]
+
+        return run_exports
+
+
+def _get_run_export_download(pkg_url, pkg_file, pkg_name):
+    with tempfile.TemporaryDirectory(dir=os.environ.get("RUNNER_TEMP")) as tmpdir:
+        try:
+            subprocess.run(
+                f"cd {tmpdir} && curl -s -L {pkg_url} --output {pkg_file}", shell=True
+            )
+            if os.path.exists(f"{tmpdir}/{pkg_file}"):
+                conda_package_handling.api.extract(f"{tmpdir}/{pkg_file}")
+
+            rxpath = f"{tmpdir}/{pkg_name}/info/run_exports.json"
+
+            if os.path.exists(rxpath):
+                with open(rxpath) as fp:
+                    run_exports = json.load(fp)
+            else:
+                run_exports = {}
+
+            for key in DEFAULT_RUN_EXPORTS:
+                if key in run_exports:
+                    print_debug(
+                        "RUN EXPORT: %s %s %s",
+                        pkg_file,
+                        key,
+                        run_exports.get(key, []),
+                    )
+                run_exports[key] = set(run_exports.get(key, []))
+
+        except Exception as e:
+            print("Could not get run exports for %s: %s", pkg_file, repr(e))
+            run_exports = None
+
+    return run_exports
+
+
+@functools.lru_cache(maxsize=10240)
+def _get_run_export(repodata_record: RepoDataRecord):
+    run_exports = None
+
+    channel_url = repodata_record.channel
+    subdir = repodata_record.subdir
+    name = repodata_record.name
+    file_name = repodata_record.file_name
+    url = repodata_record.url
+
+    if "https://" in channel_url:
+        if "conda.anaconda.org" in channel_url:
+            channel_url = channel_url.replace(
+                "conda.anaconda.org",
+                "conda-static.anaconda.org",
+            )
+        channel_name = channel_url.split("/")[:2][0]
+    else:
+        channel_name = channel_url
+        channel_url = f"https://conda-static.anaconda.org/{channel_name}/{subdir}"
+
+    channel_data = download_channeldata(channel_url)
+    if channel_data.get("packages", {}).get(name, {}).get("run_exports", {}):
+        data = get_artifact_info_as_json(
+            channel_name,
+            subdir,
+            repodata_record.file_name,
         )
 
+        if data is not None:
+            rx = data.get("rendered_recipe", {}).get("build", {}).get("run_exports", {})
+            if rx:
+                run_exports = copy.deepcopy(
+                    DEFAULT_RUN_EXPORTS,
+                )
 
-def print_debug(fmt, *args):
-    print_verb(fmt, *args, verbosity=3)
+                if isinstance(rx, str):
+                    # some packages have a single string
+                    # eg pyqt
+                    rx = [rx]
 
+                for k in rx:
+                    if k in DEFAULT_RUN_EXPORTS:
+                        print_debug(
+                            "RUN EXPORT: %s %s %s",
+                            name,
+                            k,
+                            rx[k],
+                        )
+                        run_exports[k].update(rx[k])
+                    else:
+                        print_debug(
+                            "RUN EXPORT: %s %s %s",
+                            name,
+                            "weak",
+                            [k],
+                        )
+                        run_exports["weak"].add(k)
 
-def print_critical(fmt, *args):
-    print_verb(fmt, *args, verbosity=0)
+        # fall back to getting repodata shard if needed
+        if run_exports is None:
+            print_info(
+                "RUN EXPORTS: downloading package %s/%s/%s"
+                % (channel_url, channel_name, repodata_record.file_name),
+            )
+            run_exports = _get_run_export_download(url, file_name, name)
+    else:
+        run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
 
-
-def print_warning(fmt, *args):
-    print_verb(fmt, *args, verbosity=1)
-
-
-def print_info(fmt, *args):
-    print_verb(fmt, *args, verbosity=2)
-
-
-@contextlib.contextmanager
-def suppress_conda_build_logging():
-    debug_env_var = "CONDA_FORGE_FEEDSTOCK_CHECK_SOLVABLE_DEBUG"
-    suppress_logging = debug_env_var not in os.environ
-
-    outerr = io.StringIO()
-
-    if not suppress_logging:
-        yield None
-        return
-
-    try:
-        with io.StringIO() as fout, io.StringIO() as ferr, wurlitzer.pipes(
-            stdout=outerr, stderr=wurlitzer.STDOUT
-        ):
-            yield None
-    except Exception as e:
-        print("EXCEPTION: captured C-level I/O: %r" % outerr.getvalue(), flush=True)
-        traceback.print_exc()
-        raise e
+    return run_exports
 
 
 @functools.lru_cache(maxsize=1)

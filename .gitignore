@@ -130,3 +130,6 @@ dmypy.json
 
 conda_forge_feedstock_check_solvable.egg-info/
 conda_forge_feedstock_check_solvable/_version.py
+# pixi environments
+.pixi
+

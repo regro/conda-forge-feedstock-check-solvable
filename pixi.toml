@@ -1,0 +1,32 @@
+[project]
+name = "conda-forge-feedstock-check-solvable"
+version = "0.1.0"
+description = "Add a short description here"
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[tasks]
+build = "pip install -e ."
+
+[dependencies]
+conda-package-handling = "2.2.0.*"
+conda = "23.7.4.*"
+wurlitzer = "3.0.3.*"
+"ruamel.yaml.jinja2" = "0.2.4.*"
+"ruamel.yaml" = "0.17.35.*"
+cachetools = "5.3.1.*"
+conda-smithy = "3.27.1.*"
+mamba = ">=1.5.1"
+requests = "2.31.0.*"
+conda-build = "3.27.0.*"
+python-rapidjson = "1.12.*"
+conda-forge-metadata = ">=0.2.0"
+pytest = "7.4.2.*"
+python-build = "1.0.3.*"
+flake8 = "6.1.0.*"
+toml = "0.10.2.*"
+pip = "23.2.1.*"
+flaky = "3.7.0.*"
+setuptools_scm = ">=7"
+setuptools = ">=45"
+py-rattler = "0.1.2.*"
