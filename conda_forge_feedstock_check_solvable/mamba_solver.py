@@ -31,6 +31,7 @@ from ruamel.yaml import YAML
 import cachetools.func
 import wurlitzer
 
+from conda.base.context import context
 from conda.models.match_spec import MatchSpec
 import conda_build.api
 import conda_package_handling.api
@@ -38,7 +39,6 @@ import conda_package_handling.api
 import libmambapy as api
 from mamba.utils import load_channels
 
-from conda_build.conda_interface import pkgs_dirs
 from conda_build.utils import download_channeldata
 
 import requests
@@ -47,6 +47,8 @@ import zstandard
 from conda_forge_metadata.artifact_info import (
     get_artifact_info_as_json,
 )
+
+pkgs_dirs = context.pkgs_dirs
 
 
 PACKAGE_CACHE = api.MultiPackageCache(pkgs_dirs)
