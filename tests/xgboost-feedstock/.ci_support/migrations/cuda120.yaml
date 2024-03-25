@@ -47,7 +47,7 @@ __migrator:
       - 12.0                       # [(linux64 or win) and os.environ.get("CF_CUDA_ENABLED", "False") == "True"]
   commit_message: |
     Rebuild for CUDA 12
-    
+
     The transition to CUDA 12 SDK includes new packages for all CUDA libraries and
     build tools. Notably, the cudatoolkit package no longer exists, and packages
     should depend directly on the specific CUDA libraries (libblas, libcusolver,

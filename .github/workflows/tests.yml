@@ -35,11 +35,6 @@ jobs:
           mamba install --yes pytest flake8 flaky pip python-build setuptools_scm>=7 setuptools>=45 toml
           pip install -e .
 
-      - name: lint
-        shell: bash -l {0}
-        run: |
-          flake8 conda_forge_feedstock_check_solvable
-
       - name: test versions
         shell: bash -el {0}
         run: |

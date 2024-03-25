@@ -9,44 +9,40 @@ The basic workflow is for yaml file in .ci_support
 Most of the code here is due to @wolfv in this gist,
 https://gist.github.com/wolfv/cd12bd4a448c77ff02368e97ffdf495a.
 """
-import rapidjson as json
-import os
-import traceback
-import io
-import glob
+
+import atexit
+import contextlib
+import copy
 import functools
+import glob
+import io
+import os
 import pathlib
 import pprint
-import tempfile
-import copy
 import subprocess
-import atexit
+import tempfile
 import time
+import traceback
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Dict, Tuple, List, FrozenSet, Set, Iterable
-import contextlib
-import psutil
-from ruamel.yaml import YAML
-import cachetools.func
-import wurlitzer
+from typing import Dict, FrozenSet, Iterable, List, Set, Tuple
 
-from conda.base.context import context
-from conda.models.match_spec import MatchSpec
+import cachetools.func
 import conda_build.api
 import conda_package_handling.api
-
 import libmambapy as api
-from .mamba_utils import load_channels
-
-from conda_build.utils import download_channeldata
-
+import psutil
+import rapidjson as json
 import requests
+import wurlitzer
 import zstandard
+from conda.base.context import context
+from conda.models.match_spec import MatchSpec
+from conda_build.utils import download_channeldata
+from conda_forge_metadata.artifact_info import get_artifact_info_as_json
+from ruamel.yaml import YAML
 
-from conda_forge_metadata.artifact_info import (
-    get_artifact_info_as_json,
-)
+from .mamba_utils import load_channels
 
 pkgs_dirs = context.pkgs_dirs
 
@@ -169,7 +165,6 @@ def _munge_req_star(req):
     csplit = req.split(",")
     ncs = len(csplit)
     for ic, p in enumerate(csplit):
-
         psplit = p.split("|")
         nps = len(psplit)
         for ip, pp in enumerate(psplit):
@@ -407,8 +402,11 @@ def _get_run_export(link_tuple):
                 backend="libcfgraph",
             )
             if artifact_data is not None:
-                rx = artifact_data.get("rendered_recipe", {}).get(
-                        "build", {}).get("run_exports", {})
+                rx = (
+                    artifact_data.get("rendered_recipe", {})
+                    .get("build", {})
+                    .get("run_exports", {})
+                )
 
             # Third source: download from the full artifact
             if not rx:
@@ -607,8 +605,8 @@ def _mamba_factory(channels, platform):
 @functools.lru_cache(maxsize=1)
 def virtual_package_repodata():
     # TODO: we might not want to use TemporaryDirectory
-    import tempfile
     import shutil
+    import tempfile
 
     # tmp directory in github actions
     runner_tmp = os.environ.get("RUNNER_TEMP")
@@ -625,7 +623,7 @@ def virtual_package_repodata():
     repodata = FakeRepoData(tmp_path)
 
     # glibc
-    for glibc_minor in range(12, MAX_GLIBC_MINOR+1):
+    for glibc_minor in range(12, MAX_GLIBC_MINOR + 1):
         repodata.add_package(FakePackage("__glibc", "2.%d" % glibc_minor))
 
     # cuda - get from cuda-version on conda-forge
@@ -638,10 +636,7 @@ def virtual_package_repodata():
                 stderr=subprocess.PIPE,
             )
         )
-        cuda_vers = [
-            pkg["version"]
-            for pkg in cuda_pkgs["cuda-version"]
-        ]
+        cuda_vers = [pkg["version"] for pkg in cuda_pkgs["cuda-version"]]
     except Exception:
         cuda_vers = []
     # extra hard coded list to make sure we don't miss anything
@@ -762,7 +757,7 @@ def is_recipe_solvable(
         A lookup by variant config that shows if a particular config is solvable
     """
     if timeout:
-        from multiprocessing import Process, Pipe
+        from multiprocessing import Pipe, Process
 
         parent_conn, child_conn = Pipe()
         p = Process(
@@ -818,7 +813,6 @@ def _is_recipe_solvable(
     build_platform=None,
     verbosity=1,
 ) -> Tuple[bool, List[str], Dict[str, bool]]:
-
     global VERBOSITY
     VERBOSITY = verbosity
 

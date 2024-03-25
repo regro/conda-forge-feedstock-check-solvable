@@ -34,3 +34,7 @@ line-length = 88
 
 [tool.isort]
 profile = "black"
+
+[tool.flake8]
+ignore = ['E203']
+max-line-length = 88
