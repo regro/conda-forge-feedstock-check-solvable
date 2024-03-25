@@ -12,8 +12,8 @@ index 6c157ca17..68ad4b367 100755
 --- a/R-package/configure
 +++ b/R-package/configure
 @@ -2792,37 +2792,7 @@ fi
- 
- 
+
+
  ### Endian detection
 -{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking endian" >&5
 -printf %s "checking endian... " >&6; }
@@ -47,9 +47,8 @@ index 6c157ca17..68ad4b367 100755
 -  conftest.$ac_objext conftest.beam conftest.$ac_ext
 -fi
 +ENDIAN_FLAG="-DDMLC_CMAKE_LITTLE_ENDIAN=1"
- 
- 
- OPENMP_CXXFLAGS=""
--- 
-2.40.0
 
+
+ OPENMP_CXXFLAGS=""
+--
+2.40.0

@@ -3,7 +3,6 @@
 # Copied from mamba 1.5.2
 # flake8: noqa
 
-from __future__ import absolute_import, division, print_function, unicode_literals
 
 import json
 import os
@@ -12,6 +11,7 @@ import tempfile
 import urllib.parse
 from collections import OrderedDict
 
+import libmambapy as api
 from boltons.setutils import IndexedSet
 from conda.base.constants import ChannelPriority
 from conda.base.context import context
@@ -25,8 +25,6 @@ from conda.gateways.connection.session import CondaHttpAuth
 from conda.models.channel import Channel as CondaChannel
 from conda.models.prefix_graph import PrefixGraph
 from conda.models.records import PackageRecord
-
-import libmambapy as api
 
 
 def load_channel(subdir_data, result_container):
@@ -143,7 +141,7 @@ def load_channels(
     subprio_index = len(index)
     if has_priority:
         # first, count unique channels
-        n_channels = len(set([entry["channel"].canonical_name for _, entry in index]))
+        n_channels = len({entry["channel"].canonical_name for _, entry in index})
         current_channel = index[0][1]["channel"].canonical_name
         channel_prio = n_channels
 
@@ -392,7 +390,7 @@ def compute_final_precs(
         else:
             key = split_anaconda_token(remove_auth(c))[0]
         if key not in lookup_dict:
-            raise ValueError("missing key {} in channels: {}".format(key, lookup_dict))
+            raise ValueError(f"missing key {key} in channels: {lookup_dict}")
         sdir = lookup_dict[key]
 
         rec = to_package_record_from_subjson(sdir, pkg, jsn_s)
