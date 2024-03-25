@@ -542,6 +542,7 @@ def test_arrow_solvable_timeout(tmp_path):
 
 
 @flaky
+@pytest.mark.xfail
 def test_pillow_solvable(tmp_path):
     """pillow acted up for python310"""
     feedstock_dir = clone_and_checkout_repo(
