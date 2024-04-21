@@ -399,7 +399,6 @@ def _get_run_export(link_tuple):
                 channel,
                 subdir,
                 filename,
-                backend="libcfgraph",
             )
             if artifact_data is not None:
                 rx = (
