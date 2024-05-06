@@ -25,7 +25,7 @@ jobs:
           show-channel-urls: true
           miniforge-version: latest
           miniforge-variant: Mambaforge
-          python-version: 3.9
+          python-version: 3.11
           use-mamba: true
 
       - name: configure conda and install code
