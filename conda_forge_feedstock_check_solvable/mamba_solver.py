@@ -24,6 +24,7 @@ import tempfile
 import time
 import traceback
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Dict, FrozenSet, Iterable, List, Set, Tuple
 
@@ -53,6 +54,8 @@ DEFAULT_RUN_EXPORTS = {
     "weak": set(),
     "strong": set(),
     "noarch": set(),
+    "strong_constrains": set(),
+    "weak_constrains": set(),
 }
 
 MAX_GLIBC_MINOR = 50
@@ -421,25 +424,28 @@ def _get_run_export(link_tuple):
         if isinstance(rx, str):
             # some packages have a single string
             # eg pyqt
-            rx = [rx]
+            rx = {"weak": [rx]}
 
-        for k in rx:
+        if not isinstance(rx, Mapping):
+            # list is equivalent to weak
+            rx = {"weak": rx}
+
+        for k, spec_list in rx.items():
             if k in DEFAULT_RUN_EXPORTS:
                 print_debug(
                     "RUN EXPORT: %s %s %s",
                     name,
                     k,
-                    rx[k],
+                    spec_list,
                 )
-                run_exports[k].update(rx[k])
+                run_exports[k].update(spec_list)
             else:
-                print_debug(
-                    "RUN EXPORT: %s %s %s",
+                print_warning(
+                    "RUN EXPORT: unrecognized run_export key in %s: %s=%s",
                     name,
-                    "weak",
-                    [k],
+                    k,
+                    spec_list,
                 )
-                run_exports["weak"].add(k)
 
     return run_exports
 
