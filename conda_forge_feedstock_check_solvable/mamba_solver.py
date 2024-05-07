@@ -1087,7 +1087,13 @@ def _is_recipe_solvable_on_platform(
                 if m.noarch or m.noarch_python:
                     run_req = list(set(run_req) | host_rx["noarch"])
                 else:
-                    run_req = list(set(run_req) | host_rx["weak"])
+                    run_req = list(
+                        set(run_req)
+                        | host_rx["weak"]
+                        | host_rx["weak_constrains"]
+                        | host_rx["strong"]
+                        | host_rx["strong_constrains"]
+                    )
 
         if run_req:
             run_req = apply_pins(run_req, host_req or [], build_req or [], outnames, m)
