@@ -347,6 +347,30 @@ def test_cupy_solvable(tmp_path):
 
 
 @flaky
+def test_run_exports_strong_constrains_solvable(tmp_path):
+    """dolfinx_mpc depends on fenics-basix which has strong_constrained in run_exports"""
+    feedstock_dir = clone_and_checkout_repo(
+        tmp_path,
+        "https://github.com/conda-forge/dolfinx_mpc-feedstock",
+        ref="main",
+    )
+    subprocess.run(
+        "git checkout 26bb83149573c285cd596fbca2db89a4c69435c3",
+        cwd=feedstock_dir,
+        shell=True,
+        check=True,
+    )
+    # keep only one variant, avoid unnecessary solves
+    # every variant exercises this issue and this feedstock has ~100 variants
+    for cbc in pathlib.Path(feedstock_dir).glob(".ci_support/*.yaml"):
+        if cbc.name != "linux_64_mpimpichpython3.10.____cpythonscalarreal.yaml":
+            cbc.unlink()
+    solvable, errors, solvable_by_variant = is_recipe_solvable(feedstock_dir)
+    pprint.pprint(solvable_by_variant)
+    assert solvable, pprint.pformat(errors)
+
+
+@flaky
 def test_is_recipe_solvable_notok(feedstock_dir):
     recipe_file = os.path.join(feedstock_dir, "recipe", "meta.yaml")
     os.makedirs(os.path.dirname(recipe_file), exist_ok=True)
