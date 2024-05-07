@@ -1039,19 +1039,37 @@ def _is_recipe_solvable_on_platform(
                 errors.append(_err)
 
             if m.is_cross:
-                host_req = list(set(host_req) | build_rx["strong"])
+                host_req = list(
+                    set(host_req) | build_rx["strong"] | build_rx["strong_constrains"]
+                )
                 if not (m.noarch or m.noarch_python):
-                    run_req = list(set(run_req) | build_rx["strong"])
+                    run_req = list(
+                        set(run_req)
+                        | build_rx["strong"]
+                        | build_rx["strong_constrains"]
+                    )
             else:
                 if m.noarch or m.noarch_python:
                     if m.build_is_host:
                         run_req = list(set(run_req) | build_rx["noarch"])
                 else:
-                    run_req = list(set(run_req) | build_rx["strong"])
+                    run_req = list(
+                        set(run_req)
+                        | build_rx["strong"]
+                        | build_rx["strong_constrains"]
+                    )
                     if m.build_is_host:
-                        run_req = list(set(run_req) | build_rx["weak"])
+                        run_req = list(
+                            set(run_req)
+                            | build_rx["weak"]
+                            | build_rx["weak_constrains"]
+                        )
                     else:
-                        host_req = list(set(host_req) | build_rx["strong"])
+                        host_req = list(
+                            set(host_req)
+                            | build_rx["strong"]
+                            | build_rx["strong_constrains"]
+                        )
 
         if host_req:
             host_req = _clean_reqs(host_req, outnames)
