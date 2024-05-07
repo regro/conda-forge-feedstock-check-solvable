@@ -1039,37 +1039,19 @@ def _is_recipe_solvable_on_platform(
                 errors.append(_err)
 
             if m.is_cross:
-                host_req = list(
-                    set(host_req) | build_rx["strong"] | build_rx["strong_constrains"]
-                )
+                host_req = list(set(host_req) | build_rx["strong"])
                 if not (m.noarch or m.noarch_python):
-                    run_req = list(
-                        set(run_req)
-                        | build_rx["strong"]
-                        | build_rx["strong_constrains"]
-                    )
+                    run_req = list(set(run_req) | build_rx["strong"])
             else:
                 if m.noarch or m.noarch_python:
                     if m.build_is_host:
                         run_req = list(set(run_req) | build_rx["noarch"])
                 else:
-                    run_req = list(
-                        set(run_req)
-                        | build_rx["strong"]
-                        | build_rx["strong_constrains"]
-                    )
+                    run_req = list(set(run_req) | build_rx["strong"])
                     if m.build_is_host:
-                        run_req = list(
-                            set(run_req)
-                            | build_rx["weak"]
-                            | build_rx["weak_constrains"]
-                        )
+                        run_req = list(set(run_req) | build_rx["weak"])
                     else:
-                        host_req = list(
-                            set(host_req)
-                            | build_rx["strong"]
-                            | build_rx["strong_constrains"]
-                        )
+                        host_req = list(set(host_req) | build_rx["strong"])
 
         if host_req:
             host_req = _clean_reqs(host_req, outnames)
@@ -1087,13 +1069,7 @@ def _is_recipe_solvable_on_platform(
                 if m.noarch or m.noarch_python:
                     run_req = list(set(run_req) | host_rx["noarch"])
                 else:
-                    run_req = list(
-                        set(run_req)
-                        | host_rx["weak"]
-                        | host_rx["weak_constrains"]
-                        | host_rx["strong"]
-                        | host_rx["strong_constrains"]
-                    )
+                    run_req = list(set(run_req) | host_rx["weak"])
 
         if run_req:
             run_req = apply_pins(run_req, host_req or [], build_req or [], outnames, m)
