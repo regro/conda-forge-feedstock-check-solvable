@@ -131,12 +131,15 @@ def test_mamba_solver_constraints():
     with suppress_conda_build_logging():
         solver = _mamba_factory(("conda-forge",), "osx-64")
         solvable, err, solution = solver.solve(
-            ["simplejson"], constraints=["python=3.10"]
+            ["simplejson"], constraints=["python=3.10", "zeromq=4.2"]
         )
     assert solvable, err
     python = [pkg for pkg in solution if pkg.split()[0] == "python"][0]
     name, version, build = python.split(None, 2)
     assert version.startswith("3.10.")
+    assert not any(pkg.startswith("zeromq") for pkg in solution), pprint.pformat(
+        solution
+    )
 
 
 @flaky

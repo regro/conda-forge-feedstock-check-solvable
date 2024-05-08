@@ -479,6 +479,9 @@ class MambaSolver:
             platform=platform,
             has_priority=True,
         )
+        for repo in self.repos:
+            # need set_installed for add_pin, not sure why
+            repo.set_installed()
 
     def solve(
         self,
@@ -533,7 +536,7 @@ class MambaSolver:
             pprint.pformat(_constraints),
         )
         for constraint in _constraints:
-            solver.add_constraint(constraint)
+            solver.add_pin(constraint)
 
         solver.add_jobs(_specs, api.SOLVER_INSTALL)
         success = solver.solve()
