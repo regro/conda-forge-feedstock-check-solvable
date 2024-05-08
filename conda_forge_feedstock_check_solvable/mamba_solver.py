@@ -479,6 +479,9 @@ class MambaSolver:
             platform=platform,
             has_priority=True,
         )
+        for repo in self.repos:
+            # need set_installed for add_pin, not sure why
+            repo.set_installed()
 
     def solve(
         self,
@@ -486,6 +489,7 @@ class MambaSolver:
         get_run_exports=False,
         ignore_run_exports_from=None,
         ignore_run_exports=None,
+        constraints=None,
     ) -> Tuple[bool, List[str]]:
         """Solve given a set of specs.
 
@@ -501,6 +505,9 @@ class MambaSolver:
             A list of packages from which to ignore the run exports.
         ignore_run_exports : list, optional
             A list of things that should be ignore in the run exports.
+        constraints : list, optional
+            A list of package specs to apply as constraints to the solve.
+            These packages are not included in the solution.
 
         Returns
         -------
@@ -521,8 +528,15 @@ class MambaSolver:
         solver = api.Solver(self.pool, solver_options)
 
         _specs = [_norm_spec(s) for s in specs]
+        _constraints = [_norm_spec(s) for s in constraints or []]
 
-        print_debug("MAMBA running solver for specs \n\n%s\n", pprint.pformat(_specs))
+        print_debug(
+            "MAMBA running solver for specs \n\n%s\nconstraints: %s\n",
+            pprint.pformat(_specs),
+            pprint.pformat(_constraints),
+        )
+        for constraint in _constraints:
+            solver.add_pin(constraint)
 
         solver.add_jobs(_specs, api.SOLVER_INSTALL)
         success = solver.solve()
@@ -1023,6 +1037,8 @@ def _is_recipe_solvable_on_platform(
         build_req = m.get_value("requirements/build", [])
         host_req = m.get_value("requirements/host", [])
         run_req = m.get_value("requirements/run", [])
+        run_constrained = m.get_value("requirements/run_constrained", [])
+
         ign_runex = m.get_value("build/ignore_run_exports", [])
         ign_runex_from = m.get_value("build/ignore_run_exports_from", [])
 
@@ -1038,6 +1054,8 @@ def _is_recipe_solvable_on_platform(
             if _err is not None:
                 errors.append(_err)
 
+            run_constrained = list(set(run_constrained) | build_rx["strong_constrains"])
+
             if m.is_cross:
                 host_req = list(set(host_req) | build_rx["strong"])
                 if not (m.noarch or m.noarch_python):
@@ -1050,6 +1068,9 @@ def _is_recipe_solvable_on_platform(
                     run_req = list(set(run_req) | build_rx["strong"])
                     if m.build_is_host:
                         run_req = list(set(run_req) | build_rx["weak"])
+                        run_constrained = list(
+                            set(run_constrained) | build_rx["weak_constrains"]
+                        )
                     else:
                         host_req = list(set(host_req) | build_rx["strong"])
 
@@ -1069,12 +1090,21 @@ def _is_recipe_solvable_on_platform(
                 if m.noarch or m.noarch_python:
                     run_req = list(set(run_req) | host_rx["noarch"])
                 else:
-                    run_req = list(set(run_req) | host_rx["weak"])
+                    run_req = list(set(run_req) | host_rx["weak"] | host_rx["strong"])
 
+                run_constrained = list(
+                    set(run_constrained)
+                    | host_rx["weak_constrains"]
+                    | host_rx["strong_constrains"]
+                )
+
+        run_constrained = apply_pins(
+            run_constrained, host_req or [], build_req or [], outnames, m
+        )
         if run_req:
             run_req = apply_pins(run_req, host_req or [], build_req or [], outnames, m)
             run_req = _clean_reqs(run_req, outnames)
-            _solvable, _err, _ = solver.solve(run_req)
+            _solvable, _err, _ = solver.solve(run_req, constraints=run_constrained)
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
@@ -1086,7 +1116,7 @@ def _is_recipe_solvable_on_platform(
         )
         if tst_req:
             tst_req = _clean_reqs(tst_req, outnames)
-            _solvable, _err, _ = solver.solve(tst_req)
+            _solvable, _err, _ = solver.solve(tst_req, constraints=run_constrained)
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)

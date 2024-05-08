@@ -127,6 +127,32 @@ python:
 
 
 @flaky
+def test_mamba_solver_constraints():
+    with suppress_conda_build_logging():
+        solver = _mamba_factory(("conda-forge",), "osx-64")
+        solvable, err, solution = solver.solve(
+            ["simplejson"], constraints=["python=3.10", "zeromq=4.2"]
+        )
+    assert solvable, err
+    python = [pkg for pkg in solution if pkg.split()[0] == "python"][0]
+    name, version, build = python.split(None, 2)
+    assert version.startswith("3.10.")
+    assert not any(pkg.startswith("zeromq") for pkg in solution), pprint.pformat(
+        solution
+    )
+
+
+@flaky
+def test_mamba_solver_constraints_unsolvable():
+    with suppress_conda_build_logging():
+        solver = MambaSolver(("conda-forge",), "osx-64")
+        solvable, err, solution = solver.solve(
+            ["simplejson"], constraints=["python=3.10", "python=3.11"]
+        )
+    assert not solvable, pprint.pformat(solution)
+
+
+@flaky
 def test_mamba_solver_nvcc():
     with suppress_conda_build_logging():
         virtual_packages = virtual_package_repodata()
@@ -347,27 +373,96 @@ def test_cupy_solvable(tmp_path):
 
 
 @flaky
-def test_run_exports_strong_constrains_solvable(tmp_path):
-    """dolfinx_mpc depends on fenics-basix which has strong_constrained in run_exports"""
-    feedstock_dir = clone_and_checkout_repo(
-        tmp_path,
-        "https://github.com/conda-forge/dolfinx_mpc-feedstock",
-        ref="main",
-    )
-    subprocess.run(
-        "git checkout 26bb83149573c285cd596fbca2db89a4c69435c3",
-        cwd=feedstock_dir,
-        shell=True,
-        check=True,
-    )
+def test_run_exports_constrains_conflict(feedstock_dir, tmp_path_factory):
+    recipe_file = os.path.join(feedstock_dir, "recipe", "meta.yaml")
+    os.makedirs(os.path.dirname(recipe_file), exist_ok=True)
+
+    with FakeRepoData(tmp_path_factory.mktemp("channel")) as repodata:
+        for pkg in [
+            FakePackage("fakeconstrainedpkg", version="1.0"),
+            FakePackage("fakeconstrainedpkg", version="2.0"),
+        ]:
+            repodata.add_package(pkg)
+
+    with open(recipe_file, "w") as fp:
+        fp.write(
+            dedent(
+                """
+    package:
+      name: "cf-autotick-bot-test-package"
+      version: "0.9"
+
+    source:
+      path: .
+
+    build:
+      number: 8
+
+    requirements:
+      build: []
+      host:
+        # pick a package with run_exports: constrains
+        - fenics-basix 0.8.0 *_0
+      run:
+        - libzlib
+        - fakeconstrainedpkg
+      run_constrained:
+        - fakeconstrainedpkg 1.0
+    """,
+            ),
+        )
+
     # keep only one variant, avoid unnecessary solves
-    # every variant exercises this issue and this feedstock has ~100 variants
     for cbc in pathlib.Path(feedstock_dir).glob(".ci_support/*.yaml"):
-        if cbc.name != "linux_64_mpimpichpython3.10.____cpythonscalarreal.yaml":
+        if cbc.name != "linux_python3.8.____cpython.yaml":
+            cbc.unlink()
+
+    solvable, errors, solve_by_variant = is_recipe_solvable(
+        feedstock_dir,
+        additional_channels=[repodata.channel_url],
+        timeout=None,
+    )
+    assert solvable, pprint.pformat(errors)
+
+
+@flaky
+def test_run_exports_constrains_notok(feedstock_dir, tmp_path_factory):
+    recipe_file = os.path.join(feedstock_dir, "recipe", "meta.yaml")
+    os.makedirs(os.path.dirname(recipe_file), exist_ok=True)
+
+    with open(recipe_file, "w") as fp:
+        fp.write(
+            dedent(
+                """
+    package:
+      name: "cf-autotick-bot-test-package"
+      version: "0.9"
+
+    source:
+      path: .
+
+    build:
+      number: 8
+
+    requirements:
+      build: []
+      host:
+        # pick a package with run_exports: constrains
+        - fenics-basix 0.8.0 *_0
+      run:
+        # fenics-basix 0.8 has run_exports.strong_constrains: nanobind 1.9
+        # this should conflict
+        - nanobind =1.8
+    """,
+            ),
+        )
+
+    # keep only one variant, avoid unnecessary solves
+    for cbc in pathlib.Path(feedstock_dir).glob(".ci_support/*.yaml"):
+        if cbc.name != "linux_python3.8.____cpython.yaml":
             cbc.unlink()
     solvable, errors, solvable_by_variant = is_recipe_solvable(feedstock_dir)
-    pprint.pprint(solvable_by_variant)
-    assert solvable, pprint.pformat(errors)
+    assert not solvable, pprint.pformat(errors)
 
 
 @flaky
@@ -520,7 +615,7 @@ def test_mamba_solver_hangs():
 
     with suppress_conda_build_logging():
         solver = _mamba_factory(("conda-forge", "defaults"), "linux-64")
-        solver.solve(
+        res = solver.solve(
             [
                 "gdal >=2.1.0",
                 "ncurses >=6.2,<7.0a0",
