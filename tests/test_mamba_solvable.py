@@ -295,6 +295,13 @@ def test_xgboost_solvable():
     assert solvable, pprint.pformat(errors)
 
 
+@flaky
+def test_pandas_solvable():
+    feedstock_dir = os.path.join(os.path.dirname(__file__), "pandas-feedstock")
+    solvable, errors, _ = is_recipe_solvable(feedstock_dir)
+    assert solvable, pprint.pformat(errors)
+
+
 def clone_and_checkout_repo(base_path: pathlib.Path, origin_url: str, ref: str):
     subprocess.run(
         f"cd {base_path} && git clone {origin_url} repo",
