@@ -6,15 +6,20 @@ import conda_build.api
 import psutil
 from ruamel.yaml import YAML
 
+from conda_forge_feedstock_check_solvable.mamba import (
+    _mamba_factory,
+    virtual_package_repodata,
+)
 from conda_forge_feedstock_check_solvable.utils import (
-    print_warning,
+    MAX_GLIBC_MINOR,
+    _clean_reqs,
+    _get_run_export,
+    apply_pins,
     print_debug,
     print_info,
-    MAX_GLIBC_MINOR,
+    print_warning,
     suppress_conda_build_logging,
-    _get_run_export,
 )
-from conda_forge_feedstock_check_solvable.mamba import _mamba_factory, virtual_package_repodata
 
 
 def _func(feedstock_dir, additional_channels, build_platform, verbosity, conn):
@@ -191,46 +196,6 @@ def _is_recipe_solvable(
     del os.environ["CONDA_OVERRIDE_GLIBC"]
 
     return solvable, errors, solvable_by_cbc
-
-
-def _clean_reqs(reqs, names):
-    reqs = [r for r in reqs if not any(r.split(" ")[0] == nm for nm in names)]
-    return reqs
-
-
-def _filter_problematic_reqs(reqs):
-    """There are some reqs that have issues when used in certain contexts"""
-    problem_reqs = {
-        # This causes a strange self-ref for arrow-cpp
-        "parquet-cpp",
-    }
-    reqs = [r for r in reqs if r.split(" ")[0] not in problem_reqs]
-    return reqs
-
-
-def apply_pins(reqs, host_req, build_req, outnames, m):
-    from conda_build.render import get_pin_from_build
-
-    pin_deps = host_req if m.is_cross else build_req
-
-    full_build_dep_versions = {
-        dep.split()[0]: " ".join(dep.split()[1:])
-        for dep in _clean_reqs(pin_deps, outnames)
-    }
-
-    pinned_req = []
-    for dep in reqs:
-        try:
-            pinned_req.append(
-                get_pin_from_build(m, dep, full_build_dep_versions),
-            )
-        except Exception:
-            # in case we couldn't apply pins for whatever
-            # reason, fall back to the req
-            pinned_req.append(dep)
-
-    pinned_req = _filter_problematic_reqs(pinned_req)
-    return pinned_req
 
 
 def _is_recipe_solvable_on_platform(

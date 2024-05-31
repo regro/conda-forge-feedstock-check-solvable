@@ -17,7 +17,6 @@ from conda.models.match_spec import MatchSpec
 from conda_build.utils import download_channeldata
 from conda_forge_metadata.artifact_info import get_artifact_info_as_json
 
-
 DEFAULT_RUN_EXPORTS = {
     "weak": set(),
     "strong": set(),
@@ -213,6 +212,7 @@ def _norm_spec(myspec):
 
     return " ".join(parts)
 
+
 def _get_run_export_download(link_tuple):
     c, pkg, jdata = link_tuple
 
@@ -373,3 +373,42 @@ def _get_run_export(link_tuple):
 
     return run_exports
 
+
+def _clean_reqs(reqs, names):
+    reqs = [r for r in reqs if not any(r.split(" ")[0] == nm for nm in names)]
+    return reqs
+
+
+def _filter_problematic_reqs(reqs):
+    """There are some reqs that have issues when used in certain contexts"""
+    problem_reqs = {
+        # This causes a strange self-ref for arrow-cpp
+        "parquet-cpp",
+    }
+    reqs = [r for r in reqs if r.split(" ")[0] not in problem_reqs]
+    return reqs
+
+
+def apply_pins(reqs, host_req, build_req, outnames, m):
+    from conda_build.render import get_pin_from_build
+
+    pin_deps = host_req if m.is_cross else build_req
+
+    full_build_dep_versions = {
+        dep.split()[0]: " ".join(dep.split()[1:])
+        for dep in _clean_reqs(pin_deps, outnames)
+    }
+
+    pinned_req = []
+    for dep in reqs:
+        try:
+            pinned_req.append(
+                get_pin_from_build(m, dep, full_build_dep_versions),
+            )
+        except Exception:
+            # in case we couldn't apply pins for whatever
+            # reason, fall back to the req
+            pinned_req.append(dep)
+
+    pinned_req = _filter_problematic_reqs(pinned_req)
+    return pinned_req
