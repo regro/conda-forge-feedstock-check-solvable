@@ -8,6 +8,7 @@ from textwrap import dedent
 import pytest
 from flaky import flaky
 
+from conda_forge_feedstock_check_solvable.check_solvable import is_recipe_solvable
 from conda_forge_feedstock_check_solvable.mamba_solver import (
     FakePackage,
     FakeRepoData,
@@ -18,7 +19,6 @@ from conda_forge_feedstock_check_solvable.mamba_solver import (
 from conda_forge_feedstock_check_solvable.utils import (
     _norm_spec,
     apply_pins,
-    is_recipe_solvable,
     suppress_conda_build_logging,
 )
 
