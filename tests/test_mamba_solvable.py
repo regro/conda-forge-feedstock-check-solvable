@@ -8,16 +8,18 @@ from textwrap import dedent
 import pytest
 from flaky import flaky
 
+from conda_forge_feedstock_check_solvable.check_solvable import is_recipe_solvable
 from conda_forge_feedstock_check_solvable.mamba_solver import (
     FakePackage,
     FakeRepoData,
     MambaSolver,
     _mamba_factory,
+    virtual_package_repodata,
+)
+from conda_forge_feedstock_check_solvable.utils import (
     _norm_spec,
     apply_pins,
-    is_recipe_solvable,
     suppress_conda_build_logging,
-    virtual_package_repodata,
 )
 
 FEEDSTOCK_DIR = os.path.join(os.path.dirname(__file__), "test_feedstock")
