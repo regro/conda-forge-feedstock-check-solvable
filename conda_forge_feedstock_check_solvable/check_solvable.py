@@ -6,7 +6,7 @@ import conda_build.api
 import psutil
 from ruamel.yaml import YAML
 
-from conda_forge_feedstock_check_solvable.mamba import (
+from conda_forge_feedstock_check_solvable.mamba_solver import (
     _mamba_factory,
     virtual_package_repodata,
 )
