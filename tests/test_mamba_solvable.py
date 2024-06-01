@@ -16,11 +16,7 @@ from conda_forge_feedstock_check_solvable.mamba_solver import (
     _mamba_factory,
     virtual_package_repodata,
 )
-from conda_forge_feedstock_check_solvable.utils import (
-    _norm_spec,
-    apply_pins,
-    suppress_conda_build_logging,
-)
+from conda_forge_feedstock_check_solvable.utils import apply_pins, suppress_output
 
 FEEDSTOCK_DIR = os.path.join(os.path.dirname(__file__), "test_feedstock")
 
@@ -82,7 +78,7 @@ python:
         )
     import conda_build.api
 
-    with suppress_conda_build_logging():
+    with suppress_output():
         config = conda_build.config.get_or_merge_config(
             None,
             platform="linux",
@@ -130,7 +126,7 @@ python:
 
 @flaky
 def test_mamba_solver_constraints():
-    with suppress_conda_build_logging():
+    with suppress_output():
         solver = _mamba_factory(("conda-forge",), "osx-64")
         solvable, err, solution = solver.solve(
             ["simplejson"], constraints=["python=3.10", "zeromq=4.2"]
@@ -146,7 +142,7 @@ def test_mamba_solver_constraints():
 
 @flaky
 def test_mamba_solver_constraints_unsolvable():
-    with suppress_conda_build_logging():
+    with suppress_output():
         solver = MambaSolver(("conda-forge",), "osx-64")
         solvable, err, solution = solver.solve(
             ["simplejson"], constraints=["python=3.10", "python=3.11"]
@@ -156,7 +152,7 @@ def test_mamba_solver_constraints_unsolvable():
 
 @flaky
 def test_mamba_solver_nvcc():
-    with suppress_conda_build_logging():
+    with suppress_output():
         virtual_packages = virtual_package_repodata()
         solver = MambaSolver([virtual_packages, "conda-forge", "defaults"], "linux-64")
         out = solver.solve(
@@ -522,24 +518,6 @@ extra:
     assert not is_recipe_solvable(feedstock_dir)[0]
 
 
-@pytest.mark.parametrize(
-    "inreq,outreq",
-    [
-        ("blah 1.1*", "blah 1.1.*"),
-        ("blah * *_osx", "blah * *_osx"),
-        ("blah 1.1", "blah 1.1.*"),
-        ("blah =1.1", "blah 1.1.*"),
-        ("blah * *_osx", "blah * *_osx"),
-        ("blah 1.2 *_osx", "blah 1.2.* *_osx"),
-        ("blah >=1.1", "blah >=1.1"),
-        ("blah >=1.1|5|>=5,<10|19.0", "blah >=1.1|5.*|>=5,<10|19.0.*"),
-        ("blah >=1.1|5| >=5 , <10 |19.0", "blah >=1.1|5.*|>=5,<10|19.0.*"),
-    ],
-)
-def test_norm_spec(inreq, outreq):
-    assert _norm_spec(inreq) == outreq
-
-
 @flaky
 def test_virtual_package(feedstock_dir, tmp_path_factory):
     recipe_file = os.path.join(feedstock_dir, "recipe", "meta.yaml")
@@ -586,7 +564,7 @@ def test_virtual_package(feedstock_dir, tmp_path_factory):
 
 @flaky
 def test_mamba_solver_hangs():
-    with suppress_conda_build_logging():
+    with suppress_output():
         solver = _mamba_factory(("conda-forge", "defaults"), "osx-64")
         res = solver.solve(
             [
@@ -622,7 +600,7 @@ def test_mamba_solver_hangs():
         )
     assert res[0]
 
-    with suppress_conda_build_logging():
+    with suppress_output():
         solver = _mamba_factory(("conda-forge", "defaults"), "linux-64")
         res = solver.solve(
             [

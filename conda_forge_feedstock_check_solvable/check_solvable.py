@@ -12,13 +12,13 @@ from conda_forge_feedstock_check_solvable.mamba_solver import (
 )
 from conda_forge_feedstock_check_solvable.utils import (
     MAX_GLIBC_MINOR,
-    _clean_reqs,
-    _get_run_export,
     apply_pins,
+    get_run_exports,
     print_debug,
     print_info,
     print_warning,
-    suppress_conda_build_logging,
+    remove_reqs_by_name,
+    suppress_output,
 )
 
 
@@ -99,7 +99,7 @@ def is_recipe_solvable(
                     {},
                 )
         else:
-            print_warning("MAMBA SOLVER TIMEOUT for %s", feedstock_dir)
+            print_warning("SOLVER TIMEOUT for %s", feedstock_dir)
             res = (
                 True,
                 [],
@@ -229,7 +229,7 @@ def _is_recipe_solvable_on_platform(
         channel_sources = list(additional_channels) + channel_sources
 
     print_debug(
-        "MAMBA: using channels %s on platform-arch %s-%s",
+        "SOLVER using channels %s on platform-arch %s-%s",
         channel_sources,
         platform,
         arch,
@@ -239,7 +239,7 @@ def _is_recipe_solvable_on_platform(
     # it would be used in a real build
     print_debug("rendering recipe with conda build")
 
-    with suppress_conda_build_logging():
+    with suppress_output():
         for att in range(2):
             try:
                 if att == 1:
@@ -282,7 +282,7 @@ def _is_recipe_solvable_on_platform(
     # now we loop through each one and check if we can solve it
     # we check run and host and ignore the rest
     print_debug("getting mamba solver")
-    with suppress_conda_build_logging():
+    with suppress_output():
         solver = _mamba_factory(tuple(channel_sources), f"{platform}-{arch}")
         build_solver = _mamba_factory(
             tuple(channel_sources),
@@ -303,7 +303,7 @@ def _is_recipe_solvable_on_platform(
         ign_runex_from = m.get_value("build/ignore_run_exports_from", [])
 
         if build_req:
-            build_req = _clean_reqs(build_req, outnames)
+            build_req = remove_reqs_by_name(build_req, outnames)
             _solvable, _err, build_req, build_rx = build_solver.solve(
                 build_req,
                 get_run_exports=True,
@@ -335,7 +335,7 @@ def _is_recipe_solvable_on_platform(
                         host_req = list(set(host_req) | build_rx["strong"])
 
         if host_req:
-            host_req = _clean_reqs(host_req, outnames)
+            host_req = remove_reqs_by_name(host_req, outnames)
             _solvable, _err, host_req, host_rx = solver.solve(
                 host_req,
                 get_run_exports=True,
@@ -363,7 +363,7 @@ def _is_recipe_solvable_on_platform(
         )
         if run_req:
             run_req = apply_pins(run_req, host_req or [], build_req or [], outnames, m)
-            run_req = _clean_reqs(run_req, outnames)
+            run_req = remove_reqs_by_name(run_req, outnames)
             _solvable, _err, _ = solver.solve(run_req, constraints=run_constrained)
             solvable = solvable and _solvable
             if _err is not None:
@@ -375,15 +375,15 @@ def _is_recipe_solvable_on_platform(
             + run_req
         )
         if tst_req:
-            tst_req = _clean_reqs(tst_req, outnames)
+            tst_req = remove_reqs_by_name(tst_req, outnames)
             _solvable, _err, _ = solver.solve(tst_req, constraints=run_constrained)
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
 
-    print_info("RUN EXPORT CACHE STATUS: %s", _get_run_export.cache_info())
+    print_info("RUN EXPORT CACHE STATUS: %s", get_run_exports.cache_info())
     print_info(
-        "MAMBA SOLVER MEM USAGE: %d MB",
+        "SOLVER MEM USAGE: %d MB",
         psutil.Process().memory_info().rss // 1024**2,
     )
 

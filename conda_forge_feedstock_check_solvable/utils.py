@@ -29,7 +29,7 @@ MAX_GLIBC_MINOR = 50
 
 # these characters are start requirements that do not need to be munged from
 # 1.1 to 1.1.*
-REQ_START = ["!=", "==", ">", "<", ">=", "<=", "~="]
+REQ_START_NOSTAR = ["!=", "==", ">", "<", ">=", "<=", "~="]
 
 ALL_PLATFORMS = {
     "linux-aarch64",
@@ -77,6 +77,12 @@ MINIMUM_OSX_ARM64_VERS = MINIMUM_OSX_64_VERS + [
     for osx_minor in range(0, 17)
     for osx_major in range(11, 17)
 ]
+
+PROBLEMATIC_REQS = {
+    # This causes a strange self-ref for arrow-cpp
+    "parquet-cpp",
+}
+
 
 # I cannot get python logging to work correctly with all of the hacks to
 # make conda-build be quiet.
@@ -129,7 +135,7 @@ def print_debug(fmt, *args):
 
 
 @contextlib.contextmanager
-def suppress_conda_build_logging():
+def suppress_output():
     if "CONDA_FORGE_FEEDSTOCK_CHECK_SOLVABLE_DEBUG" in os.environ:
         suppress = False
     else:
@@ -174,7 +180,7 @@ def _munge_req_star(req):
             pp = pp.strip()
 
             # finally add the star if we need it
-            if any(pp.startswith(__v) for __v in REQ_START) or "*" in pp:
+            if any(pp.startswith(__v) for __v in REQ_START_NOSTAR) or "*" in pp:
                 reqs.append(pp)
             else:
                 if pp.startswith("="):
@@ -193,7 +199,9 @@ def _munge_req_star(req):
     return "".join(reqs)
 
 
-def _norm_spec(myspec):
+def convert_spec_to_conda_build(myspec):
+    """Normalize a spec string to a conda-build form, turning requirements like
+    numpy =1.0 to numpy 1.0.*."""
     m = MatchSpec(myspec)
 
     # this code looks like MatchSpec.conda_build_form() but munges stars in the
@@ -213,14 +221,19 @@ def _norm_spec(myspec):
     return " ".join(parts)
 
 
-def _get_run_export_download(link_tuple):
-    c, pkg, jdata = link_tuple
+def _get_run_exports_from_download(channel_url, subdir, pkg):
+    print_debug(
+        "RUN EXPORTS: trying download for %s/%s/%s",
+        channel_url.split("/")[-2:][0],
+        subdir,
+        pkg,
+    )
 
     with tempfile.TemporaryDirectory(dir=os.environ.get("RUNNER_TEMP")) as tmpdir:
         try:
             # download
             subprocess.run(
-                f"cd {tmpdir} && curl -s -L {c}/{pkg} --output {pkg}",
+                f"cd {tmpdir} && curl -s -L {channel_url}/{subdir}/{pkg} --output {pkg}",
                 shell=True,
             )
 
@@ -241,22 +254,14 @@ def _get_run_export_download(link_tuple):
             else:
                 run_exports = {}
 
-            for key in DEFAULT_RUN_EXPORTS:
-                if key in run_exports:
-                    print_debug(
-                        "RUN EXPORT: %s %s %s",
-                        pkg,
-                        key,
-                        run_exports.get(key, []),
-                    )
-                run_exports[key] = set(run_exports.get(key, []))
-
         except Exception as e:
-            print("Could not get run exports for %s: %s", pkg, repr(e))
+            print_debug(
+                "RUN EXPORTS: could not get run_exports from download: %s",
+                repr(e),
+            )
             run_exports = None
-            pass
 
-    return link_tuple, run_exports
+    return run_exports
 
 
 def _strip_anaconda_tokens(url):
@@ -273,25 +278,143 @@ def _strip_anaconda_tokens(url):
 def _fetch_json_zst(url):
     try:
         res = requests.get(url)
-    except requests.RequestException:
+    except requests.RequestException as e:
         # If the URL is invalid return None
+        print_debug(
+            "RUN EXPORTS: could not get run_exports from run_export.json: %s",
+            repr(e),
+        )
         return None
     compressed_binary = res.content
     binary = zstandard.decompress(compressed_binary)
     return json.loads(binary.decode("utf-8"))
 
 
+@functools.cache
+def _download_channeldata(channel_url):
+    return download_channeldata(channel_url)
+
+
+def _get_run_exports_from_run_exports_json(channel_url, subdir, filename):
+    print_debug(
+        "RUN EXPORTS: trying run_exports.json for %s/%s/%s",
+        channel_url.split("/")[-2:][0],
+        subdir,
+        filename,
+    )
+
+    run_exports_json = _fetch_json_zst(f"{channel_url}/{subdir}/run_exports.json.zst")
+
+    if run_exports_json is None:
+        return None
+
+    if filename.endswith(".conda"):
+        if "packages.conda" not in run_exports_json:
+            return None
+        pkgs = run_exports_json.get("packages.conda")
+    else:
+        if "packages" not in run_exports_json:
+            return None
+        pkgs = run_exports_json.get("packages")
+
+    if filename not in pkgs:
+        return None
+
+    if "run_exports" not in pkgs.get(filename):
+        return None
+
+    return pkgs.get(filename).get("run_exports", {})
+
+
+def _has_run_exports_in_channel_data(channel_url, filename):
+    cd = _download_channeldata(channel_url)
+    name_ver, _ = filename.rsplit("-", 1)
+    name, ver = name_ver.rsplit("-", 1)
+
+    if "packages" not in cd:
+        return True
+
+    if name not in cd["packages"]:
+        return True
+
+    if "run_exports" not in cd["packages"][name]:
+        return True
+
+    if ver not in cd["packages"][name]["run_exports"]:
+        return False
+    else:
+        return True
+
+
+def _get_run_exports_from_artifact_info(channel, subdir, filename):
+    print_debug(
+        "RUN EXPORTS: trying conda-forge-metadata for %s/%s/%s",
+        channel,
+        subdir,
+        filename,
+    )
+
+    try:
+        with suppress_output():
+            artifact_data = get_artifact_info_as_json(
+                channel,
+                subdir,
+                filename,
+            )
+        if artifact_data is not None:
+            rx = (
+                artifact_data.get("rendered_recipe", {})
+                .get("build", {})
+                .get("run_exports", {})
+            )
+        else:
+            rx = None
+    except Exception as e:
+        print_debug(
+            "RUN EXPORTS: could not get run_exports from conda-forge-metadata: %s",
+            repr(e),
+        )
+        rx = None
+
+    return rx
+
+
+def _convert_run_exports_to_canonical_form(rx):
+    run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
+    if rx is not None:
+        if isinstance(rx, str):
+            # some packages have a single string
+            # eg pyqt
+            rx = {"weak": [rx]}
+
+        if not isinstance(rx, Mapping):
+            # list is equivalent to weak
+            rx = {"weak": rx}
+
+        for k, spec_list in rx.items():
+            if k in DEFAULT_RUN_EXPORTS:
+                run_exports[k].update(spec_list)
+            else:
+                print_warning(
+                    "RUN EXPORTS: unrecognized run_export key in %s=%s",
+                    k,
+                    spec_list,
+                )
+    return run_exports
+
+
 @functools.lru_cache(maxsize=10240)
-def _get_run_export(link_tuple):
-    """
-    Given a tuple of (channel, file, json repodata) as returned by libmamba solver,
-    fetch the run exports for the artifact. There are several possible sources:
+def get_run_exports(full_channel_url, filename):
+    """Given (channel, file), fetch the run exports for the artifact.
+
+    There are several possible sources:
 
     1. CEP-12 run_exports.json file served in the channel/subdir (next to repodata.json)
-    2. conda-forge-metadata fetchers (libcgraph, oci, etc)
+    2. conda-forge-metadata fetchers (oci, etc)
     3. The full artifact (conda or tar.bz2) as a last resort
+
+    Each is tried in turn and the first that works is used.
     """
-    full_channel_url, filename, json_payload = link_tuple
     if "https://" in full_channel_url:
         https = _strip_anaconda_tokens(full_channel_url)
         channel_url = https.rsplit("/", maxsplit=1)[0]
@@ -305,98 +428,53 @@ def _get_run_export(link_tuple):
 
     channel = full_channel_url.split("/")[-2:][0]
     subdir = full_channel_url.split("/")[-2:][1]
-    data = json.loads(json_payload)
-    name = data["name"]
-    rx = {}
 
     # First source: CEP-12 run_exports.json
-    run_exports_json = _fetch_json_zst(f"{channel_url}/{subdir}/run_exports.json.zst")
-    if run_exports_json:
-        if filename.endswith(".conda"):
-            pkgs = run_exports_json.get("packages.conda", {})
-        else:
-            pkgs = run_exports_json.get("packages", {})
-        rx = pkgs.get(filename, {}).get("run_exports", {})
+    rx = _get_run_exports_from_run_exports_json(channel_url, subdir, filename)
 
     # Second source: conda-forge-metadata fetchers
-    if not rx:
-        cd = download_channeldata(channel_url)
-        if cd.get("packages", {}).get(name, {}).get("run_exports", {}):
-            artifact_data = get_artifact_info_as_json(
-                channel,
-                subdir,
-                filename,
-            )
-            if artifact_data is not None:
-                rx = (
-                    artifact_data.get("rendered_recipe", {})
-                    .get("build", {})
-                    .get("run_exports", {})
-                )
+    if rx is None and _has_run_exports_in_channel_data(channel_url, filename):
+        rx = _get_run_exports_from_artifact_info(channel, subdir, filename)
 
-            # Third source: download from the full artifact
-            if not rx:
-                print_info(
-                    "RUN EXPORTS: downloading package %s/%s/%s"
-                    % (channel_url, subdir, link_tuple[1]),
-                )
-                rx = _get_run_export_download(link_tuple)[1]
+        # Third source: download from the full artifact
+        if rx is None:
+            rx = _get_run_exports_from_download(channel_url, subdir, filename)
 
     # Sanitize run_exports data
-    run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
-    if rx:
-        if isinstance(rx, str):
-            # some packages have a single string
-            # eg pyqt
-            rx = {"weak": [rx]}
-
-        if not isinstance(rx, Mapping):
-            # list is equivalent to weak
-            rx = {"weak": rx}
-
-        for k, spec_list in rx.items():
-            if k in DEFAULT_RUN_EXPORTS:
-                print_debug(
-                    "RUN EXPORT: %s %s %s",
-                    name,
-                    k,
-                    spec_list,
-                )
-                run_exports[k].update(spec_list)
-            else:
-                print_warning(
-                    "RUN EXPORT: unrecognized run_export key in %s: %s=%s",
-                    name,
-                    k,
-                    spec_list,
-                )
+    run_exports = _convert_run_exports_to_canonical_form(rx)
+    print_debug(
+        "RUN EXPORTS: found run exports for %s/%s/%s: %s",
+        channel,
+        subdir,
+        filename,
+        run_exports,
+    )
 
     return run_exports
 
 
-def _clean_reqs(reqs, names):
-    reqs = [r for r in reqs if not any(r.split(" ")[0] == nm for nm in names)]
-    return reqs
+def remove_reqs_by_name(reqs, names):
+    """Remove requirements by name given a list of names."""
+    _names = set(names)
+    return [r for r in reqs if r.split(" ")[0] not in _names]
 
 
 def _filter_problematic_reqs(reqs):
     """There are some reqs that have issues when used in certain contexts"""
-    problem_reqs = {
-        # This causes a strange self-ref for arrow-cpp
-        "parquet-cpp",
-    }
-    reqs = [r for r in reqs if r.split(" ")[0] not in problem_reqs]
+    reqs = [r for r in reqs if r.split(" ")[0] not in PROBLEMATIC_REQS]
     return reqs
 
 
 def apply_pins(reqs, host_req, build_req, outnames, m):
+    """Apply pins to requirements given host, build requirements,
+    the output names, and the metadata from conda-build."""
     from conda_build.render import get_pin_from_build
 
     pin_deps = host_req if m.is_cross else build_req
 
     full_build_dep_versions = {
         dep.split()[0]: " ".join(dep.split()[1:])
-        for dep in _clean_reqs(pin_deps, outnames)
+        for dep in remove_reqs_by_name(pin_deps, outnames)
     }
 
     pinned_req = []
