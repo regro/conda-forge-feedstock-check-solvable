@@ -1,8 +1,9 @@
 import pytest
 
 from conda_forge_feedstock_check_solvable.utils import (
+    DEFAULT_RUN_EXPORTS,
     convert_spec_to_conda_build,
-    get_run_export,
+    get_run_exports,
 )
 
 
@@ -30,9 +31,9 @@ def test_convert_spec_to_conda_build(inreq, outreq):
         (
             "https://conda.anaconda.org/conda-forge/osx-arm64",
             "openjdk-22.0.1-hbeb2e11_0.conda",
-            None,
+            DEFAULT_RUN_EXPORTS,
         ),
     ],
 )
-def test_utils_get_run_export(full_channel_url, filename, expected):
-    get_run_export(full_channel_url, filename) == expected
+def test_utils_get_run_exports(full_channel_url, filename, expected):
+    assert get_run_exports(full_channel_url, filename) == expected

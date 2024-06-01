@@ -38,7 +38,7 @@ from conda_forge_feedstock_check_solvable.utils import (
     MINIMUM_OSX_64_VERS,
     MINIMUM_OSX_ARM64_VERS,
     convert_spec_to_conda_build,
-    get_run_export,
+    get_run_exports,
     print_debug,
     print_warning,
 )
@@ -286,7 +286,7 @@ class MambaSolver:
         for link_tuple in link_tuples:
             lt_name = json.loads(link_tuple[-1])["name"]
             if lt_name in names and lt_name not in ign_rex_from:
-                rx = get_run_export(link_tuple[0], link_tuple[1])
+                rx = get_run_exports(link_tuple[0], link_tuple[1])
                 for key in rx:
                     rx[key] = {v for v in rx[key] if v not in ign_rex}
                 for key in DEFAULT_RUN_EXPORTS:

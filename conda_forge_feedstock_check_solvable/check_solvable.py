@@ -13,7 +13,7 @@ from conda_forge_feedstock_check_solvable.mamba_solver import (
 from conda_forge_feedstock_check_solvable.utils import (
     MAX_GLIBC_MINOR,
     apply_pins,
-    get_run_export,
+    get_run_exports,
     print_debug,
     print_info,
     print_warning,
@@ -381,7 +381,7 @@ def _is_recipe_solvable_on_platform(
             if _err is not None:
                 errors.append(_err)
 
-    print_info("RUN EXPORT CACHE STATUS: %s", get_run_export.cache_info())
+    print_info("RUN EXPORT CACHE STATUS: %s", get_run_exports.cache_info())
     print_info(
         "SOLVER MEM USAGE: %d MB",
         psutil.Process().memory_info().rss // 1024**2,
