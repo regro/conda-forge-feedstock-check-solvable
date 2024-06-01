@@ -379,6 +379,30 @@ def _get_run_exports_from_artifact_info(channel, subdir, filename):
     return rx
 
 
+def _convert_run_exports_to_canonical_form(rx):
+    run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
+    if rx is not None:
+        if isinstance(rx, str):
+            # some packages have a single string
+            # eg pyqt
+            rx = {"weak": [rx]}
+
+        if not isinstance(rx, Mapping):
+            # list is equivalent to weak
+            rx = {"weak": rx}
+
+        for k, spec_list in rx.items():
+            if k in DEFAULT_RUN_EXPORTS:
+                run_exports[k].update(spec_list)
+            else:
+                print_warning(
+                    "RUN EXPORTS: unrecognized run_export key in %s=%s",
+                    k,
+                    spec_list,
+                )
+    return run_exports
+
+
 @functools.lru_cache(maxsize=10240)
 def get_run_exports(full_channel_url, filename):
     """Given (channel, file), fetch the run exports for the artifact.
@@ -417,43 +441,13 @@ def get_run_exports(full_channel_url, filename):
             rx = _get_run_exports_from_download(channel_url, subdir, filename)
 
     # Sanitize run_exports data
-    run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
-    if rx is not None:
-        if isinstance(rx, str):
-            # some packages have a single string
-            # eg pyqt
-            rx = {"weak": [rx]}
-
-        if not isinstance(rx, Mapping):
-            # list is equivalent to weak
-            rx = {"weak": rx}
-
-        for k, spec_list in rx.items():
-            if k in DEFAULT_RUN_EXPORTS:
-                print_debug(
-                    "RUN EXPORTS: %s/%s/%s found %s %s",
-                    channel,
-                    subdir,
-                    filename,
-                    k,
-                    spec_list,
-                )
-                run_exports[k].update(spec_list)
-            else:
-                print_warning(
-                    "RUN EXPORTS: unrecognized run_export key in %s/%s/%s: %s=%s",
-                    channel,
-                    subdir,
-                    filename,
-                    k,
-                    spec_list,
-                )
-
+    run_exports = _convert_run_exports_to_canonical_form(rx)
     print_debug(
-        "RUN EXPORTS: found run exports for %s/%s/%s",
+        "RUN EXPORTS: found run exports for %s/%s/%s: %s",
         channel,
         subdir,
         filename,
+        run_exports,
     )
 
     return run_exports
