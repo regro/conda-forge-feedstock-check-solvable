@@ -6,6 +6,7 @@ from conda_forge_feedstock_check_solvable.utils import (
     _get_run_exports_from_artifact_info,
     _get_run_exports_from_download,
     _get_run_exports_from_run_exports_json,
+    _has_run_exports_in_channel_data,
     convert_spec_to_conda_build,
     get_run_exports,
 )
@@ -51,6 +52,15 @@ def test_convert_spec_to_conda_build(inreq, outreq):
     ],
 )
 def test_utils_get_run_exports(full_channel_url, filename, expected):
+    if expected == DEFAULT_RUN_EXPORTS:
+        assert not _has_run_exports_in_channel_data(
+            full_channel_url.rsplit("/", 1)[0], filename
+        )
+    else:
+        assert _has_run_exports_in_channel_data(
+            full_channel_url.rsplit("/", 1)[0], filename
+        )
+
     assert get_run_exports(full_channel_url, filename) == expected
 
     assert (

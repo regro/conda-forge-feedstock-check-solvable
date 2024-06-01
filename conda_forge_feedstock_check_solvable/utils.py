@@ -329,21 +329,21 @@ def _get_run_exports_from_run_exports_json(channel_url, subdir, filename):
 def _has_run_exports_in_channel_data(channel_url, filename):
     cd = _download_channeldata(channel_url)
     name_ver, _ = filename.rsplit("-", 1)
-    name, _ = name_ver.rsplit("-", 1)
+    name, ver = name_ver.rsplit("-", 1)
 
     if "packages" not in cd:
         return True
 
-    if "name" not in cd["packages"]:
+    if name not in cd["packages"]:
         return True
 
     if "run_exports" not in cd["packages"][name]:
         return True
 
-    if cd["packages"][name]["run_exports"]:
-        return True
-    else:
+    if ver not in cd["packages"][name]["run_exports"]:
         return False
+    else:
+        return True
 
 
 def _get_run_exports_from_artifact_info(channel, subdir, filename):
