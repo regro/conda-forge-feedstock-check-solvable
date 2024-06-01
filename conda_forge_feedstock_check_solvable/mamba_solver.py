@@ -37,8 +37,8 @@ from conda_forge_feedstock_check_solvable.utils import (
     MINIMUM_CUDA_VERS,
     MINIMUM_OSX_64_VERS,
     MINIMUM_OSX_ARM64_VERS,
-    _get_run_export,
-    _norm_spec,
+    convert_spec_to_conda_build,
+    get_run_export,
     print_debug,
     print_warning,
 )
@@ -206,8 +206,8 @@ class MambaSolver:
         solver_options = [(api.SOLVER_FLAG_ALLOW_DOWNGRADE, 1)]
         solver = api.Solver(self.pool, solver_options)
 
-        _specs = [_norm_spec(s) for s in specs]
-        _constraints = [_norm_spec(s) for s in constraints or []]
+        _specs = [convert_spec_to_conda_build(s) for s in specs]
+        _constraints = [convert_spec_to_conda_build(s) for s in constraints or []]
 
         print_debug(
             "MAMBA running solver for specs \n\n%s\nconstraints: %s\n",
@@ -286,7 +286,7 @@ class MambaSolver:
         for link_tuple in link_tuples:
             lt_name = json.loads(link_tuple[-1])["name"]
             if lt_name in names and lt_name not in ign_rex_from:
-                rx = _get_run_export(link_tuple)
+                rx = get_run_export(link_tuple[0], link_tuple[1])
                 for key in rx:
                     rx[key] = {v for v in rx[key] if v not in ign_rex}
                 for key in DEFAULT_RUN_EXPORTS:

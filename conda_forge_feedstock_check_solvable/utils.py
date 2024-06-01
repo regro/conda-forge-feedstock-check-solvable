@@ -29,7 +29,7 @@ MAX_GLIBC_MINOR = 50
 
 # these characters are start requirements that do not need to be munged from
 # 1.1 to 1.1.*
-REQ_START = ["!=", "==", ">", "<", ">=", "<=", "~="]
+REQ_START_NOSTAR = ["!=", "==", ">", "<", ">=", "<=", "~="]
 
 ALL_PLATFORMS = {
     "linux-aarch64",
@@ -77,6 +77,12 @@ MINIMUM_OSX_ARM64_VERS = MINIMUM_OSX_64_VERS + [
     for osx_minor in range(0, 17)
     for osx_major in range(11, 17)
 ]
+
+PROBLEMATIC_REQS = {
+    # This causes a strange self-ref for arrow-cpp
+    "parquet-cpp",
+}
+
 
 # I cannot get python logging to work correctly with all of the hacks to
 # make conda-build be quiet.
@@ -174,7 +180,7 @@ def _munge_req_star(req):
             pp = pp.strip()
 
             # finally add the star if we need it
-            if any(pp.startswith(__v) for __v in REQ_START) or "*" in pp:
+            if any(pp.startswith(__v) for __v in REQ_START_NOSTAR) or "*" in pp:
                 reqs.append(pp)
             else:
                 if pp.startswith("="):
@@ -193,7 +199,9 @@ def _munge_req_star(req):
     return "".join(reqs)
 
 
-def _norm_spec(myspec):
+def convert_spec_to_conda_build(myspec):
+    """Normalize a spec string to a conda-build form, turning requirements like
+    numpy =1.0 to numpy 1.0.*."""
     m = MatchSpec(myspec)
 
     # this code looks like MatchSpec.conda_build_form() but munges stars in the
@@ -213,9 +221,7 @@ def _norm_spec(myspec):
     return " ".join(parts)
 
 
-def _get_run_export_download(link_tuple):
-    c, pkg, jdata = link_tuple
-
+def _get_run_export_download(c, pkg):
     with tempfile.TemporaryDirectory(dir=os.environ.get("RUNNER_TEMP")) as tmpdir:
         try:
             # download
@@ -256,7 +262,7 @@ def _get_run_export_download(link_tuple):
             run_exports = None
             pass
 
-    return link_tuple, run_exports
+    return run_exports
 
 
 def _strip_anaconda_tokens(url):
@@ -282,16 +288,17 @@ def _fetch_json_zst(url):
 
 
 @functools.lru_cache(maxsize=10240)
-def _get_run_export(link_tuple):
-    """
-    Given a tuple of (channel, file, json repodata) as returned by libmamba solver,
-    fetch the run exports for the artifact. There are several possible sources:
+def get_run_export(full_channel_url, filename):
+    """Given (channel, file), fetch the run exports for the artifact.
+
+    There are several possible sources:
 
     1. CEP-12 run_exports.json file served in the channel/subdir (next to repodata.json)
-    2. conda-forge-metadata fetchers (libcgraph, oci, etc)
+    2. conda-forge-metadata fetchers (oci, etc)
     3. The full artifact (conda or tar.bz2) as a last resort
+
+    Each is tried in turn and the first that works is used.
     """
-    full_channel_url, filename, json_payload = link_tuple
     if "https://" in full_channel_url:
         https = _strip_anaconda_tokens(full_channel_url)
         channel_url = https.rsplit("/", maxsplit=1)[0]
@@ -305,8 +312,8 @@ def _get_run_export(link_tuple):
 
     channel = full_channel_url.split("/")[-2:][0]
     subdir = full_channel_url.split("/")[-2:][1]
-    data = json.loads(json_payload)
-    name = data["name"]
+    name_ver, _ = filename.rsplit("-", 1)
+    name, _ = name_ver.rsplit("-", 1)
     rx = {}
 
     # First source: CEP-12 run_exports.json
@@ -338,9 +345,9 @@ def _get_run_export(link_tuple):
             if not rx:
                 print_info(
                     "RUN EXPORTS: downloading package %s/%s/%s"
-                    % (channel_url, subdir, link_tuple[1]),
+                    % (channel_url, subdir, filename),
                 )
-                rx = _get_run_export_download(link_tuple)[1]
+                rx = _get_run_export_download(channel_url, filename)
 
     # Sanitize run_exports data
     run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
@@ -374,29 +381,28 @@ def _get_run_export(link_tuple):
     return run_exports
 
 
-def _clean_reqs(reqs, names):
-    reqs = [r for r in reqs if not any(r.split(" ")[0] == nm for nm in names)]
-    return reqs
+def remove_reqs_by_name(reqs, names):
+    """Remove requirements by name given a list of names."""
+    _names = set(names)
+    return [r for r in reqs if r.split(" ")[0] not in _names]
 
 
 def _filter_problematic_reqs(reqs):
     """There are some reqs that have issues when used in certain contexts"""
-    problem_reqs = {
-        # This causes a strange self-ref for arrow-cpp
-        "parquet-cpp",
-    }
-    reqs = [r for r in reqs if r.split(" ")[0] not in problem_reqs]
+    reqs = [r for r in reqs if r.split(" ")[0] not in PROBLEMATIC_REQS]
     return reqs
 
 
 def apply_pins(reqs, host_req, build_req, outnames, m):
+    """Apply pins to requirements given host, build requirements,
+    the output names, and the metadata from conda-build."""
     from conda_build.render import get_pin_from_build
 
     pin_deps = host_req if m.is_cross else build_req
 
     full_build_dep_versions = {
         dep.split()[0]: " ".join(dep.split()[1:])
-        for dep in _clean_reqs(pin_deps, outnames)
+        for dep in remove_reqs_by_name(pin_deps, outnames)
     }
 
     pinned_req = []

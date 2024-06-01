@@ -17,8 +17,8 @@ from conda_forge_feedstock_check_solvable.mamba_solver import (
     virtual_package_repodata,
 )
 from conda_forge_feedstock_check_solvable.utils import (
-    _norm_spec,
     apply_pins,
+    convert_spec_to_conda_build,
     suppress_conda_build_logging,
 )
 
@@ -536,8 +536,8 @@ extra:
         ("blah >=1.1|5| >=5 , <10 |19.0", "blah >=1.1|5.*|>=5,<10|19.0.*"),
     ],
 )
-def test_norm_spec(inreq, outreq):
-    assert _norm_spec(inreq) == outreq
+def testconvert_spec_to_conda_build(inreq, outreq):
+    assert convert_spec_to_conda_build(inreq) == outreq
 
 
 @flaky
