@@ -6,10 +6,7 @@ import conda_build.api
 import psutil
 from ruamel.yaml import YAML
 
-from conda_forge_feedstock_check_solvable.mamba_solver import (
-    _mamba_factory,
-    virtual_package_repodata,
-)
+from conda_forge_feedstock_check_solvable.mamba_solver import mamba_solver_factory
 from conda_forge_feedstock_check_solvable.utils import (
     MAX_GLIBC_MINOR,
     apply_pins,
@@ -19,6 +16,9 @@ from conda_forge_feedstock_check_solvable.utils import (
     print_warning,
     remove_reqs_by_name,
     suppress_output,
+)
+from conda_forge_feedstock_check_solvable.virtual_packages import (
+    virtual_package_repodata,
 )
 
 
@@ -283,8 +283,8 @@ def _is_recipe_solvable_on_platform(
     # we check run and host and ignore the rest
     print_debug("getting mamba solver")
     with suppress_output():
-        solver = _mamba_factory(tuple(channel_sources), f"{platform}-{arch}")
-        build_solver = _mamba_factory(
+        solver = mamba_solver_factory(tuple(channel_sources), f"{platform}-{arch}")
+        build_solver = mamba_solver_factory(
             tuple(channel_sources),
             f"{build_platform}-{build_arch}",
         )

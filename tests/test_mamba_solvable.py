@@ -13,7 +13,7 @@ from conda_forge_feedstock_check_solvable.mamba_solver import (
     FakePackage,
     FakeRepoData,
     MambaSolver,
-    _mamba_factory,
+    mamba_solver_factory,
     virtual_package_repodata,
 )
 from conda_forge_feedstock_check_solvable.utils import apply_pins, suppress_output
@@ -90,7 +90,7 @@ python:
             config=config,
         )
 
-        solver = _mamba_factory(("conda-forge", "defaults"), "linux-64")
+        solver = mamba_solver_factory(("conda-forge", "defaults"), "linux-64")
 
         metas = conda_build.api.render(
             str(tmp_path),
@@ -127,7 +127,7 @@ python:
 @flaky
 def test_mamba_solver_constraints():
     with suppress_output():
-        solver = _mamba_factory(("conda-forge",), "osx-64")
+        solver = mamba_solver_factory(("conda-forge",), "osx-64")
         solvable, err, solution = solver.solve(
             ["simplejson"], constraints=["python=3.10", "zeromq=4.2"]
         )
@@ -565,7 +565,7 @@ def test_virtual_package(feedstock_dir, tmp_path_factory):
 @flaky
 def test_mamba_solver_hangs():
     with suppress_output():
-        solver = _mamba_factory(("conda-forge", "defaults"), "osx-64")
+        solver = mamba_solver_factory(("conda-forge", "defaults"), "osx-64")
         res = solver.solve(
             [
                 "pytest",
@@ -601,7 +601,7 @@ def test_mamba_solver_hangs():
     assert res[0]
 
     with suppress_output():
-        solver = _mamba_factory(("conda-forge", "defaults"), "linux-64")
+        solver = mamba_solver_factory(("conda-forge", "defaults"), "linux-64")
         res = solver.solve(
             [
                 "gdal >=2.1.0",
