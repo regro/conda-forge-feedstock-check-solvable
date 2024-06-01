@@ -5,6 +5,7 @@ from conda_forge_feedstock_check_solvable.utils import (
     get_run_export,
 )
 
+
 @pytest.mark.parametrize(
     "inreq,outreq",
     [
@@ -26,7 +27,11 @@ def test_convert_spec_to_conda_build(inreq, outreq):
 @pytest.mark.parametrize(
     "full_channel_url,filename,expected",
     [
-        ("https://conda.anaconda.org/conda-forge/osx-arm64", "openjdk-22.0.1-hbeb2e11_0.conda", None),
+        (
+            "https://conda.anaconda.org/conda-forge/osx-arm64",
+            "openjdk-22.0.1-hbeb2e11_0.conda",
+            None,
+        ),
     ],
 )
 def test_utils_get_run_export(full_channel_url, filename, expected):
