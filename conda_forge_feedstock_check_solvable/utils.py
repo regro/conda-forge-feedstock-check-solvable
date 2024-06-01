@@ -87,7 +87,7 @@ PROBLEMATIC_REQS = {
 # I cannot get python logging to work correctly with all of the hacks to
 # make conda-build be quiet.
 # so this is a thing
-VERBOSITY = 3
+VERBOSITY = 1
 VERBOSITY_PREFIX = {
     0: "CRITICAL",
     1: "WARNING",
