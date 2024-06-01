@@ -18,7 +18,7 @@ from conda_forge_feedstock_check_solvable.utils import (
     print_info,
     print_warning,
     remove_reqs_by_name,
-    suppress_conda_build_logging,
+    suppress_output,
 )
 
 
@@ -239,7 +239,7 @@ def _is_recipe_solvable_on_platform(
     # it would be used in a real build
     print_debug("rendering recipe with conda build")
 
-    with suppress_conda_build_logging():
+    with suppress_output():
         for att in range(2):
             try:
                 if att == 1:
@@ -282,7 +282,7 @@ def _is_recipe_solvable_on_platform(
     # now we loop through each one and check if we can solve it
     # we check run and host and ignore the rest
     print_debug("getting mamba solver")
-    with suppress_conda_build_logging():
+    with suppress_output():
         solver = _mamba_factory(tuple(channel_sources), f"{platform}-{arch}")
         build_solver = _mamba_factory(
             tuple(channel_sources),

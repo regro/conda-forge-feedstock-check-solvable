@@ -135,7 +135,7 @@ def print_debug(fmt, *args):
 
 
 @contextlib.contextmanager
-def suppress_conda_build_logging():
+def suppress_output():
     if "CONDA_FORGE_FEEDSTOCK_CHECK_SOLVABLE_DEBUG" in os.environ:
         suppress = False
     else:
@@ -258,7 +258,7 @@ def _get_run_export_download(c, pkg):
                 run_exports[key] = set(run_exports.get(key, []))
 
         except Exception as e:
-            print("Could not get run exports for %s: %s", pkg, repr(e))
+            print(f"Could not get run exports for {pkg}: {repr(e)}")
             run_exports = None
             pass
 
@@ -299,6 +299,8 @@ def get_run_export(full_channel_url, filename):
 
     Each is tried in turn and the first that works is used.
     """
+    print_debug(f"RUN EXPORTS: {full_channel_url} {filename}")
+
     if "https://" in full_channel_url:
         https = _strip_anaconda_tokens(full_channel_url)
         channel_url = https.rsplit("/", maxsplit=1)[0]
@@ -329,20 +331,35 @@ def get_run_export(full_channel_url, filename):
     if not rx:
         cd = download_channeldata(channel_url)
         if cd.get("packages", {}).get(name, {}).get("run_exports", {}):
-            artifact_data = get_artifact_info_as_json(
-                channel,
-                subdir,
-                filename,
-            )
-            if artifact_data is not None:
-                rx = (
-                    artifact_data.get("rendered_recipe", {})
-                    .get("build", {})
-                    .get("run_exports", {})
+            try:
+                print_debug(
+                    "RUN EXPORTS: using conda-forge-metadata for %s/%s/%s",
+                    channel,
+                    subdir,
+                    filename,
                 )
+                with suppress_output():
+                    artifact_data = get_artifact_info_as_json(
+                        channel,
+                        subdir,
+                        filename,
+                    )
+                if artifact_data is not None:
+                    rx = (
+                        artifact_data.get("rendered_recipe", {})
+                        .get("build", {})
+                        .get("run_exports", {})
+                    )
+            except Exception as e:
+                print_debug(
+                    "RUN EXPORT: could not get run_exports from conda-forge-metadata: %s",
+                    repr(e),
+                )
+                artifact_data = None
+                rx = {}
 
             # Third source: download from the full artifact
-            if not rx:
+            if not rx and artifact_data is None:
                 print_info(
                     "RUN EXPORTS: downloading package %s/%s/%s"
                     % (channel_url, subdir, filename),
