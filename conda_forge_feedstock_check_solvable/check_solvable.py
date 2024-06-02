@@ -82,7 +82,7 @@ def is_recipe_solvable(
     solvable_by_variant : dict
         A lookup by variant config that shows if a particular config is solvable
     """
-    if timeout and solver in ["mamba", "rattler"]:
+    if timeout and solver in ["mamba"]:
         from multiprocessing import Pipe, Process
 
         parent_conn, child_conn = Pipe()

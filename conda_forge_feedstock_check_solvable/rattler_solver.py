@@ -1,5 +1,6 @@
 import asyncio
 import copy
+import datetime
 import os
 import pprint
 from typing import List
@@ -86,8 +87,12 @@ class RattlerSolver:
             A dictionary with the weak and strong run exports for the packages.
             Only returned if get_run_exports is True.
         """
+
         if timeout is not None:
-            raise RuntimeError("The `timeout` keyword is currently ignored!")
+            print_warning(
+                "The `timeout` keyword is currently buggy in rattler and so is being ignored!"
+            )
+            timeout = None
 
         ignore_run_exports_from = ignore_run_exports_from or []
         ignore_run_exports = ignore_run_exports or []
@@ -102,12 +107,15 @@ class RattlerSolver:
                 "RATTLER running solver for specs \n\n%s\n", pprint.pformat(_specs)
             )
 
+            if timeout is not None:
+                timeout = datetime.timedelta(seconds=timeout)
+
             solution = asyncio.run(
                 solve(
                     channels=self._channels,
                     specs=_specs,
                     platforms=self._platforms,
-                    timeout=None,
+                    timeout=timeout,
                 )
             )
             success = True
