@@ -135,6 +135,19 @@ def print_debug(fmt, *args):
 
 
 @contextlib.contextmanager
+def override_env_var(name, value):
+    old_value = os.environ.get(name, None)
+    try:
+        os.environ[name] = value
+        yield
+    finally:
+        if old_value is None:
+            del os.environ[name]
+        else:
+            os.environ[name] = old_value
+
+
+@contextlib.contextmanager
 def suppress_output():
     if "CONDA_FORGE_FEEDSTOCK_CHECK_SOLVABLE_DEBUG" in os.environ:
         suppress = False

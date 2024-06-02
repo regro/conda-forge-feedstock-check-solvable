@@ -14,6 +14,7 @@ from conda_forge_feedstock_check_solvable.utils import (
     MAX_GLIBC_MINOR,
     apply_pins,
     get_run_exports,
+    override_env_var,
     print_debug,
     print_info,
     print_warning,
@@ -151,67 +152,66 @@ def _is_recipe_solvable(
 
     additional_channels = additional_channels or []
     additional_channels += [virtual_package_repodata()]
-    os.environ["CONDA_OVERRIDE_GLIBC"] = "2.%d" % MAX_GLIBC_MINOR
+    with override_env_var("CONDA_OVERRIDE_GLIBC", "2.%d" % MAX_GLIBC_MINOR):
+        errors = []
+        cbcs = sorted(glob.glob(os.path.join(feedstock_dir, ".ci_support", "*.yaml")))
+        if len(cbcs) == 0:
+            errors.append(
+                "No `.ci_support/*.yaml` files found! This can happen when a rerender "
+                "results in no builds for a recipe (e.g., a recipe is python 2.7 only). "
+                "This attempted migration is being reported as not solvable.",
+            )
+            print_warning(errors[-1])
+            return False, errors, {}
 
-    errors = []
-    cbcs = sorted(glob.glob(os.path.join(feedstock_dir, ".ci_support", "*.yaml")))
-    if len(cbcs) == 0:
-        errors.append(
-            "No `.ci_support/*.yaml` files found! This can happen when a rerender "
-            "results in no builds for a recipe (e.g., a recipe is python 2.7 only). "
-            "This attempted migration is being reported as not solvable.",
-        )
-        print_warning(errors[-1])
-        return False, errors, {}
+        if not os.path.exists(os.path.join(feedstock_dir, "recipe", "meta.yaml")):
+            errors.append(
+                "No `recipe/meta.yaml` file found! This issue is quite weird and "
+                "someone should investigate!",
+            )
+            print_warning(errors[-1])
+            return False, errors, {}
 
-    if not os.path.exists(os.path.join(feedstock_dir, "recipe", "meta.yaml")):
-        errors.append(
-            "No `recipe/meta.yaml` file found! This issue is quite weird and "
-            "someone should investigate!",
-        )
-        print_warning(errors[-1])
-        return False, errors, {}
+        print_info("CHECKING FEEDSTOCK: %s", os.path.basename(feedstock_dir))
+        solvable = True
+        solvable_by_cbc = {}
+        for cbc_fname in cbcs:
+            time_left = timeout - (time.time() - start_time) if timeout else None
+            if timeout and time_left <= 0:
+                print_warning("SOLVER TIMEOUT for %s", feedstock_dir)
+                return True, [], {}
 
-    print_info("CHECKING FEEDSTOCK: %s", os.path.basename(feedstock_dir))
-    solvable = True
-    solvable_by_cbc = {}
-    for cbc_fname in cbcs:
-        if timeout and time.time() - start_time > timeout:
-            print_warning("SOLVER TIMEOUT for %s", feedstock_dir)
-            return True, [], {}
+            # we need to extract the platform (e.g., osx, linux) and arch (e.g., 64, aarm64)
+            # conda smithy forms a string that is
+            #
+            #  {{ platform }} if arch == 64
+            #  {{ platform }}_{{ arch }} if arch != 64
+            #
+            # Thus we undo that munging here.
+            _parts = os.path.basename(cbc_fname).split("_")
+            platform = _parts[0]
+            arch = _parts[1]
+            if arch not in ["32", "aarch64", "ppc64le", "armv7l", "arm64"]:
+                arch = "64"
 
-        # we need to extract the platform (e.g., osx, linux) and arch (e.g., 64, aarm64)
-        # conda smithy forms a string that is
-        #
-        #  {{ platform }} if arch == 64
-        #  {{ platform }}_{{ arch }} if arch != 64
-        #
-        # Thus we undo that munging here.
-        _parts = os.path.basename(cbc_fname).split("_")
-        platform = _parts[0]
-        arch = _parts[1]
-        if arch not in ["32", "aarch64", "ppc64le", "armv7l", "arm64"]:
-            arch = "64"
+            print_info("CHECKING RECIPE SOLVABLE: %s", os.path.basename(cbc_fname))
 
-        print_info("CHECKING RECIPE SOLVABLE: %s", os.path.basename(cbc_fname))
-        _solvable, _errors = _is_recipe_solvable_on_platform(
-            os.path.join(feedstock_dir, "recipe"),
-            cbc_fname,
-            platform,
-            arch,
-            build_platform_arch=(
-                build_platform.get(f"{platform}_{arch}", f"{platform}_{arch}")
-            ),
-            additional_channels=additional_channels,
-            solver_backend=solver,
-            timeout=timeout,
-        )
-        solvable = solvable and _solvable
-        cbc_name = os.path.basename(cbc_fname).rsplit(".", maxsplit=1)[0]
-        errors.extend([f"{cbc_name}: {e}" for e in _errors])
-        solvable_by_cbc[cbc_name] = _solvable
-
-    del os.environ["CONDA_OVERRIDE_GLIBC"]
+            _solvable, _errors = _is_recipe_solvable_on_platform(
+                os.path.join(feedstock_dir, "recipe"),
+                cbc_fname,
+                platform,
+                arch,
+                build_platform_arch=(
+                    build_platform.get(f"{platform}_{arch}", f"{platform}_{arch}")
+                ),
+                additional_channels=additional_channels,
+                solver_backend=solver,
+                timeout=time_left,
+            )
+            solvable = solvable and _solvable
+            cbc_name = os.path.basename(cbc_fname).rsplit(".", maxsplit=1)[0]
+            errors.extend([f"{cbc_name}: {e}" for e in _errors])
+            solvable_by_cbc[cbc_name] = _solvable
 
     return solvable, errors, solvable_by_cbc
 
