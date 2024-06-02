@@ -1,11 +1,14 @@
-from flaky import flaky
 import pprint
-import pytest
 
-from conda_forge_feedstock_check_solvable.virtual_packages import virtual_package_repodata
-from conda_forge_feedstock_check_solvable.rattler_solver import rattler_solver_factory
+import pytest
+from flaky import flaky
+
 from conda_forge_feedstock_check_solvable.mamba_solver import mamba_solver_factory
+from conda_forge_feedstock_check_solvable.rattler_solver import rattler_solver_factory
 from conda_forge_feedstock_check_solvable.utils import apply_pins, suppress_output
+from conda_forge_feedstock_check_solvable.virtual_packages import (
+    virtual_package_repodata,
+)
 
 
 @pytest.fixture(scope="session", params=["rattler", "mamba"])
@@ -151,7 +154,9 @@ def test_solvers_constraints_unsolvable(solver_factory):
 def test_solvers_nvcc_with_virtual_package(solver_factory):
     with suppress_output():
         virtual_packages = virtual_package_repodata()
-        solver = solver_factory((virtual_packages, "conda-forge", "defaults"), "linux-64")
+        solver = solver_factory(
+            (virtual_packages, "conda-forge", "defaults"), "linux-64"
+        )
         out = solver.solve(
             ["gcc_linux-64 7.*", "gxx_linux-64 7.*", "nvcc_linux-64 11.0.*"]
         )
