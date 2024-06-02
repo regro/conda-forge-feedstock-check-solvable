@@ -1,7 +1,6 @@
 import os
 import pathlib
 import pprint
-import shutil
 import subprocess
 from textwrap import dedent
 
@@ -16,16 +15,6 @@ from conda_forge_feedstock_check_solvable.virtual_packages import (
 
 FEEDSTOCK_DIR = os.path.join(os.path.dirname(__file__), "test_feedstock")
 VERB = 1
-
-
-@pytest.fixture()
-def feedstock_dir(tmp_path):
-    ci_support = tmp_path / ".ci_support"
-    ci_support.mkdir(exist_ok=True)
-    src_ci_support = pathlib.Path(FEEDSTOCK_DIR) / ".ci_support"
-    for fn in os.listdir(src_ci_support):
-        shutil.copy(src_ci_support / fn, ci_support / fn)
-    return str(tmp_path)
 
 
 @pytest.fixture(scope="session", params=["rattler", "mamba"])
