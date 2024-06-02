@@ -1,7 +1,6 @@
 import os
 import pathlib
 import pprint
-import shutil
 import subprocess
 from textwrap import dedent
 
@@ -10,15 +9,15 @@ from flaky import flaky
 
 from conda_forge_feedstock_check_solvable.check_solvable import is_recipe_solvable
 from conda_forge_feedstock_check_solvable.mamba_solver import (
-    FakePackage,
-    FakeRepoData,
     MambaSolver,
     _mamba_factory,
-    virtual_package_repodata,
 )
 from conda_forge_feedstock_check_solvable.utils import apply_pins, suppress_output
-
-FEEDSTOCK_DIR = os.path.join(os.path.dirname(__file__), "test_feedstock")
+from conda_forge_feedstock_check_solvable.virtual_packages import (
+    FakePackage,
+    FakeRepoData,
+    virtual_package_repodata,
+)
 
 
 @flaky
@@ -159,16 +158,6 @@ def test_mamba_solver_nvcc():
             ["gcc_linux-64 7.*", "gxx_linux-64 7.*", "nvcc_linux-64 11.0.*"]
         )
     assert out[0], out[1]
-
-
-@pytest.fixture()
-def feedstock_dir(tmp_path):
-    ci_support = tmp_path / ".ci_support"
-    ci_support.mkdir(exist_ok=True)
-    src_ci_support = pathlib.Path(FEEDSTOCK_DIR) / ".ci_support"
-    for fn in os.listdir(src_ci_support):
-        shutil.copy(src_ci_support / fn, ci_support / fn)
-    return str(tmp_path)
 
 
 @flaky
@@ -516,50 +505,6 @@ extra:
 """,
         )
     assert not is_recipe_solvable(feedstock_dir)[0]
-
-
-@flaky
-def test_virtual_package(feedstock_dir, tmp_path_factory):
-    recipe_file = os.path.join(feedstock_dir, "recipe", "meta.yaml")
-    os.makedirs(os.path.dirname(recipe_file), exist_ok=True)
-
-    with FakeRepoData(tmp_path_factory.mktemp("channel")) as repodata:
-        for pkg in [
-            FakePackage("fakehostvirtualpkgdep", depends=frozenset(["__virtual >=10"])),
-            FakePackage("__virtual", version="10"),
-        ]:
-            repodata.add_package(pkg)
-
-    with open(recipe_file, "w") as fp:
-        fp.write(
-            dedent(
-                """
-    package:
-      name: "cf-autotick-bot-test-package"
-      version: "0.9"
-
-    source:
-      path: .
-
-    build:
-      number: 8
-
-    requirements:
-      host:
-        - python
-        - fakehostvirtualpkgdep
-        - pip
-      run:
-        - python
-    """,
-            ),
-        )
-
-    solvable, err, solve_by_variant = is_recipe_solvable(
-        feedstock_dir,
-        additional_channels=[repodata.channel_url],
-    )
-    assert solvable
 
 
 @flaky
