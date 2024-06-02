@@ -77,7 +77,9 @@ extra:
     - conda-forge/bot
 """,
         )
-    assert is_recipe_solvable(feedstock_dir, solver=solver, verbosity=VERB)[0]
+    assert is_recipe_solvable(
+        feedstock_dir, solver=solver, verbosity=VERB, timeout=None
+    )[0]
 
 
 @flaky
@@ -129,6 +131,7 @@ extra:
         feedstock_dir,
         solver=solver,
         verbosity=VERB,
+        timeout=None,
     )
     print(solvable_by_variant)
     assert not solvable
@@ -152,6 +155,7 @@ def test_r_base_cross_solvable(solver):
         build_platform={"osx_arm64": "osx_64"},
         solver=solver,
         verbosity=VERB,
+        timeout=None,
     )
     assert solvable, pprint.pformat(errors)
 
@@ -160,7 +164,10 @@ def test_r_base_cross_solvable(solver):
 def test_xgboost_solvable(solver):
     feedstock_dir = os.path.join(os.path.dirname(__file__), "xgboost-feedstock")
     solvable, errors, _ = is_recipe_solvable(
-        feedstock_dir, solver=solver, verbosity=VERB
+        feedstock_dir,
+        solver=solver,
+        verbosity=VERB,
+        timeout=None,
     )
     assert solvable, pprint.pformat(errors)
 
@@ -169,7 +176,10 @@ def test_xgboost_solvable(solver):
 def test_pandas_solvable(solver):
     feedstock_dir = os.path.join(os.path.dirname(__file__), "pandas-feedstock")
     solvable, errors, _ = is_recipe_solvable(
-        feedstock_dir, solver=solver, verbosity=VERB
+        feedstock_dir,
+        solver=solver,
+        verbosity=VERB,
+        timeout=None,
     )
     assert solvable, pprint.pformat(errors)
 
@@ -193,6 +203,7 @@ def test_arrow_solvable(tmp_path, solver):
         feedstock_dir,
         solver=solver,
         verbosity=VERB,
+        timeout=None,
     )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
@@ -210,6 +221,7 @@ def test_guiqwt_solvable(tmp_path, solver):
         feedstock_dir,
         solver=solver,
         verbosity=VERB,
+        timeout=None,
     )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
@@ -227,6 +239,7 @@ def test_datalad_solvable(tmp_path, solver):
         feedstock_dir,
         solver=solver,
         verbosity=VERB,
+        timeout=None,
     )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
@@ -244,6 +257,7 @@ def test_grpcio_solvable(tmp_path, solver):
         feedstock_dir,
         solver=solver,
         verbosity=VERB,
+        timeout=None,
     )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
@@ -266,6 +280,7 @@ def test_cupy_solvable(tmp_path, solver):
         feedstock_dir,
         solver=solver,
         verbosity=VERB,
+        timeout=None,
     )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
@@ -319,9 +334,9 @@ def test_run_exports_constrains_conflict(feedstock_dir, tmp_path_factory, solver
     solvable, errors, solve_by_variant = is_recipe_solvable(
         feedstock_dir,
         additional_channels=[repodata.channel_url],
-        timeout=None,
         solver=solver,
         verbosity=VERB,
+        timeout=None,
     )
     assert solvable, pprint.pformat(errors)
 
@@ -366,6 +381,7 @@ def test_run_exports_constrains_notok(feedstock_dir, tmp_path_factory, solver):
         feedstock_dir,
         solver=solver,
         verbosity=VERB,
+        timeout=None,
     )
     assert not solvable, pprint.pformat(errors)
 
@@ -415,7 +431,9 @@ extra:
     - conda-forge/bot
 """,
         )
-    assert not is_recipe_solvable(feedstock_dir, solver=solver, verbosity=VERB)[0]
+    assert not is_recipe_solvable(
+        feedstock_dir, solver=solver, verbosity=VERB, timeout=None
+    )[0]
 
 
 @flaky
@@ -508,6 +526,7 @@ python_impl:
         feedstock_dir,
         solver=solver,
         verbosity=VERB,
+        timeout=None,
     )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
