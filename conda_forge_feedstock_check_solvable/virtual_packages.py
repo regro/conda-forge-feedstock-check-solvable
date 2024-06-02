@@ -62,12 +62,23 @@ class FakeRepoData:
 
     def _write_subdir(self, subdir):
         packages = {}
-        out = {"info": {"subdir": subdir}, "packages": packages}
+        out = {
+            "info": {"subdir": subdir},
+            "packages": packages,
+            "paxkages.conda": {},
+            "removed": [],
+            "repodata_version": 1,
+        }
         for pkg, subdirs in self.packages_by_subdir.items():
             if subdir not in subdirs:
                 continue
             fname, info_dict = pkg.to_repodata_entry()
             info_dict["subdir"] = subdir
+            if subdir == "noarch":
+                info_dict["noarch"] = "generic"
+            else:
+                if "noarch" in info_dict:
+                    del info_dict["noarch"]
             packages[fname] = info_dict
 
         (self.base_path / subdir).mkdir(exist_ok=True)

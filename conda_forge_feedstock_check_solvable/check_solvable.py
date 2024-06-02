@@ -6,7 +6,9 @@ import conda_build.api
 import psutil
 from ruamel.yaml import YAML
 
+import conda_forge_feedstock_check_solvable.utils
 from conda_forge_feedstock_check_solvable.mamba_solver import mamba_solver_factory
+from conda_forge_feedstock_check_solvable.rattler_solver import rattler_solver_factory
 from conda_forge_feedstock_check_solvable.utils import (
     MAX_GLIBC_MINOR,
     apply_pins,
@@ -22,13 +24,14 @@ from conda_forge_feedstock_check_solvable.virtual_packages import (
 )
 
 
-def _func(feedstock_dir, additional_channels, build_platform, verbosity, conn):
+def _func(feedstock_dir, additional_channels, build_platform, verbosity, solver, conn):
     try:
         res = _is_recipe_solvable(
             feedstock_dir,
             additional_channels=additional_channels,
             build_platform=build_platform,
             verbosity=verbosity,
+            solver=solver,
         )
         conn.send(res)
     except Exception as e:
@@ -43,6 +46,7 @@ def is_recipe_solvable(
     timeout=600,
     build_platform=None,
     verbosity=1,
+    solver="mamba",
 ) -> Tuple[bool, List[str], Dict[str, bool]]:
     """Compute if a recipe is solvable.
 
@@ -64,6 +68,8 @@ def is_recipe_solvable(
     verbosity : int
         An int indicating the level of verbosity from 0 (no output) to 3
         (gobbs of output).
+    solver : str
+        The solver to use. One of `mamba` or `rattler`.
 
     Returns
     -------
@@ -71,7 +77,7 @@ def is_recipe_solvable(
         The logical AND of the solvability of the recipe on all platforms
         in the CI scripts.
     errors : list of str
-        A list of errors from mamba. Empty if recipe is solvable.
+        A list of errors from the solver. Empty if recipe is solvable.
     solvable_by_variant : dict
         A lookup by variant config that shows if a particular config is solvable
     """
@@ -86,6 +92,7 @@ def is_recipe_solvable(
                 additional_channels,
                 build_platform,
                 verbosity,
+                solver,
                 child_conn,
             ),
         )
@@ -121,6 +128,7 @@ def is_recipe_solvable(
             additional_channels=additional_channels,
             build_platform=build_platform,
             verbosity=verbosity,
+            solver=solver,
         )
 
     return res
@@ -131,9 +139,9 @@ def _is_recipe_solvable(
     additional_channels=(),
     build_platform=None,
     verbosity=1,
+    solver="mamba",
 ) -> Tuple[bool, List[str], Dict[str, bool]]:
-    global VERBOSITY
-    VERBOSITY = verbosity
+    conda_forge_feedstock_check_solvable.utils.VERBOSITY = verbosity
 
     build_platform = build_platform or {}
 
@@ -187,6 +195,7 @@ def _is_recipe_solvable(
                 build_platform.get(f"{platform}_{arch}", f"{platform}_{arch}")
             ),
             additional_channels=additional_channels,
+            solver_backend=solver,
         )
         solvable = solvable and _solvable
         cbc_name = os.path.basename(cbc_fname).rsplit(".", maxsplit=1)[0]
@@ -205,6 +214,7 @@ def _is_recipe_solvable_on_platform(
     arch,
     build_platform_arch=None,
     additional_channels=(),
+    solver_backend="mamba",
 ):
     # parse the channel sources from the CBC
     parser = YAML(typ="jinja2")
@@ -281,13 +291,21 @@ def _is_recipe_solvable_on_platform(
 
     # now we loop through each one and check if we can solve it
     # we check run and host and ignore the rest
-    print_debug("getting mamba solver")
+    print_debug("getting solver")
     with suppress_output():
-        solver = mamba_solver_factory(tuple(channel_sources), f"{platform}-{arch}")
-        build_solver = mamba_solver_factory(
+        if solver_backend == "rattler":
+            solver_factory = rattler_solver_factory
+        elif solver_backend == "mamba":
+            solver_factory = mamba_solver_factory
+        else:
+            raise ValueError(f"Unknown solver backend {solver_backend}")
+
+        solver = solver_factory(tuple(channel_sources), f"{platform}-{arch}")
+        build_solver = solver_factory(
             tuple(channel_sources),
             f"{build_platform}-{build_arch}",
         )
+
     solvable = True
     errors = []
     outnames = [m.name() for m, _, _ in metas]
