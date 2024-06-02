@@ -13,4 +13,4 @@ wurlitzer
 requests
 zstandard
 boltons>=23.0.0
-py-rattler=0.6
+py-rattler~=0.6
