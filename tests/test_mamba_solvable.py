@@ -1,7 +1,6 @@
 import os
 import pathlib
 import pprint
-import shutil
 import subprocess
 from textwrap import dedent
 
@@ -19,8 +18,6 @@ from conda_forge_feedstock_check_solvable.virtual_packages import (
     FakeRepoData,
     virtual_package_repodata,
 )
-
-FEEDSTOCK_DIR = os.path.join(os.path.dirname(__file__), "test_feedstock")
 
 
 @flaky
@@ -161,16 +158,6 @@ def test_mamba_solver_nvcc():
             ["gcc_linux-64 7.*", "gxx_linux-64 7.*", "nvcc_linux-64 11.0.*"]
         )
     assert out[0], out[1]
-
-
-@pytest.fixture()
-def feedstock_dir(tmp_path):
-    ci_support = tmp_path / ".ci_support"
-    ci_support.mkdir(exist_ok=True)
-    src_ci_support = pathlib.Path(FEEDSTOCK_DIR) / ".ci_support"
-    for fn in os.listdir(src_ci_support):
-        shutil.copy(src_ci_support / fn, ci_support / fn)
-    return str(tmp_path)
 
 
 @flaky
