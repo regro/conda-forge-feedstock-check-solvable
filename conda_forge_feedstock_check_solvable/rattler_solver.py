@@ -32,6 +32,7 @@ class RattlerSolver:
     """
 
     def __init__(self, channels, platform_arch) -> None:
+        self.channels = channels
         _channels = []
         for c in channels:
             if c == "defaults":
@@ -40,9 +41,9 @@ class RattlerSolver:
                 _channels.append("https://repo.anaconda.com/pkgs/msys2")
             else:
                 _channels.append(c)
-        self.channels = [Channel(c) for c in _channels]
+        self._channels = [Channel(c) for c in _channels]
         self.platform_arch = platform_arch
-        self.platforms = [Platform(self.platform_arch), Platform("noarch")]
+        self._platforms = [Platform(self.platform_arch), Platform("noarch")]
 
     def solve(
         self,
@@ -85,6 +86,9 @@ class RattlerSolver:
             A dictionary with the weak and strong run exports for the packages.
             Only returned if get_run_exports is True.
         """
+        if timeout is not None:
+            raise RuntimeError("The `timeout` keyword is currently ignored!")
+
         ignore_run_exports_from = ignore_run_exports_from or []
         ignore_run_exports = ignore_run_exports or []
         success = False
@@ -100,10 +104,10 @@ class RattlerSolver:
 
             solution = asyncio.run(
                 solve(
-                    channels=self.channels,
+                    channels=self._channels,
                     specs=_specs,
-                    platforms=self.platforms,
-                    timeout=timeout,
+                    platforms=self._platforms,
+                    timeout=None,
                 )
             )
             success = True
@@ -125,7 +129,7 @@ class RattlerSolver:
             print_warning(
                 "RATTLER failed to solve specs \n\n%s\n\nfor channels "
                 "\n\n%s\n\nThe reported errors are:\n\n%s\n",
-                pprint.pformat(_specs),
+                pprint.pformat(specs),
                 pprint.pformat(self.channels),
                 err,
             )
