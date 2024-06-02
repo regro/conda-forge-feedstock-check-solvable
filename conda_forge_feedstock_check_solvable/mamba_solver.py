@@ -80,6 +80,7 @@ class MambaSolver:
         ignore_run_exports_from=None,
         ignore_run_exports=None,
         constraints=None,
+        timeout=None,
     ) -> Tuple[bool, List[str]]:
         """Solve given a set of specs.
 
@@ -98,6 +99,8 @@ class MambaSolver:
         constraints : list, optional
             A list of package specs to apply as constraints to the solve.
             These packages are not included in the solution.
+        timeout : int, optional
+            Ignored by mamba.
 
         Returns
         -------
@@ -111,6 +114,9 @@ class MambaSolver:
             A dictionary with the weak and strong run exports for the packages.
             Only returned if get_run_exports is True.
         """
+        if timeout is not None:
+            raise RuntimeError("The `timeout` keyword is not supported by mamba!")
+
         ignore_run_exports_from = ignore_run_exports_from or []
         ignore_run_exports = ignore_run_exports or []
 

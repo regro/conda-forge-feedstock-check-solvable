@@ -1,5 +1,6 @@
 import glob
 import os
+import time
 from typing import Dict, List, Tuple
 
 import conda_build.api
@@ -81,7 +82,7 @@ def is_recipe_solvable(
     solvable_by_variant : dict
         A lookup by variant config that shows if a particular config is solvable
     """
-    if timeout:
+    if timeout and solver in ["mamba"]:
         from multiprocessing import Pipe, Process
 
         parent_conn, child_conn = Pipe()
@@ -129,6 +130,7 @@ def is_recipe_solvable(
             build_platform=build_platform,
             verbosity=verbosity,
             solver=solver,
+            timeout=timeout,
         )
 
     return res
@@ -140,8 +142,10 @@ def _is_recipe_solvable(
     build_platform=None,
     verbosity=1,
     solver="mamba",
+    timeout=None,
 ) -> Tuple[bool, List[str], Dict[str, bool]]:
     conda_forge_feedstock_check_solvable.utils.VERBOSITY = verbosity
+    start_time = time.time()
 
     build_platform = build_platform or {}
 
@@ -172,6 +176,10 @@ def _is_recipe_solvable(
     solvable = True
     solvable_by_cbc = {}
     for cbc_fname in cbcs:
+        if timeout and time.time() - start_time > timeout:
+            print_warning("SOLVER TIMEOUT for %s", feedstock_dir)
+            return True, [], {}
+
         # we need to extract the platform (e.g., osx, linux) and arch (e.g., 64, aarm64)
         # conda smithy forms a string that is
         #
@@ -196,6 +204,7 @@ def _is_recipe_solvable(
             ),
             additional_channels=additional_channels,
             solver_backend=solver,
+            timeout=timeout,
         )
         solvable = solvable and _solvable
         cbc_name = os.path.basename(cbc_fname).rsplit(".", maxsplit=1)[0]
@@ -215,6 +224,7 @@ def _is_recipe_solvable_on_platform(
     build_platform_arch=None,
     additional_channels=(),
     solver_backend="mamba",
+    timeout=None,
 ):
     # parse the channel sources from the CBC
     parser = YAML(typ="jinja2")
@@ -327,6 +337,7 @@ def _is_recipe_solvable_on_platform(
                 get_run_exports=True,
                 ignore_run_exports_from=ign_runex_from,
                 ignore_run_exports=ign_runex,
+                timeout=timeout,
             )
             solvable = solvable and _solvable
             if _err is not None:
@@ -359,6 +370,7 @@ def _is_recipe_solvable_on_platform(
                 get_run_exports=True,
                 ignore_run_exports_from=ign_runex_from,
                 ignore_run_exports=ign_runex,
+                timeout=timeout,
             )
             solvable = solvable and _solvable
             if _err is not None:
@@ -382,7 +394,9 @@ def _is_recipe_solvable_on_platform(
         if run_req:
             run_req = apply_pins(run_req, host_req or [], build_req or [], outnames, m)
             run_req = remove_reqs_by_name(run_req, outnames)
-            _solvable, _err, _ = solver.solve(run_req, constraints=run_constrained)
+            _solvable, _err, _ = solver.solve(
+                run_req, constraints=run_constrained, timeout=timeout
+            )
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
@@ -394,7 +408,9 @@ def _is_recipe_solvable_on_platform(
         )
         if tst_req:
             tst_req = remove_reqs_by_name(tst_req, outnames)
-            _solvable, _err, _ = solver.solve(tst_req, constraints=run_constrained)
+            _solvable, _err, _ = solver.solve(
+                tst_req, constraints=run_constrained, timeout=timeout
+            )
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
