@@ -87,13 +87,6 @@ class RattlerSolver:
             A dictionary with the weak and strong run exports for the packages.
             Only returned if get_run_exports is True.
         """
-
-        if timeout is not None:
-            print_warning(
-                "The `timeout` keyword is currently buggy in rattler and so is being ignored!"
-            )
-            timeout = None
-
         ignore_run_exports_from = ignore_run_exports_from or []
         ignore_run_exports = ignore_run_exports or []
         success = False
@@ -102,6 +95,7 @@ class RattlerSolver:
 
         try:
             _specs = [MatchSpec(s) for s in specs]
+            _constraints = [MatchSpec(c) for c in constraints] if constraints else None
 
             print_debug(
                 "RATTLER running solver for specs \n\n%s\n", pprint.pformat(_specs)
@@ -116,6 +110,7 @@ class RattlerSolver:
                     specs=_specs,
                     platforms=self._platforms,
                     timeout=timeout,
+                    constraints=_constraints,
                 )
             )
             success = True
