@@ -31,19 +31,19 @@ def feedstock_dir(tmp_path):
     return str(tmp_path)
 
 
-@pytest.fixture(scope="session", params=ALL_SOLVERS)
-def solver(request):
-    solvers = request.config.getoption("solver") or ALL_SOLVERS
-    if request.param in solvers:
-        yield request.param
-
-
-@pytest.fixture(scope="session", params=ALL_SOLVERS)
-def solver_factory(request):
-    solvers = request.config.getoption("solver") or ALL_SOLVERS
-    if request.param == "mamba" and "mamba" in solvers:
-        yield mamba_solver_factory
-    elif request.param == "rattler" and "rattler" in solvers:
-        yield rattler_solver_factory
-    else:
-        raise ValueError(f"Unknown solver {request.param}")
+def pytest_generate_tests(metafunc):
+    if "solver" in metafunc.fixturenames:
+        metafunc.parametrize(
+            "solver", metafunc.config.getoption("solver") or ALL_SOLVERS
+        )
+    if "solver_factory" in metafunc.fixturenames:
+        solvers = metafunc.config.getoption("solver") or ALL_SOLVERS
+        factories = []
+        for solver in solvers:
+            if solver == "mamba":
+                factories.append(mamba_solver_factory)
+            elif solver == "rattler":
+                factories.append(rattler_solver_factory)
+            else:
+                raise ValueError(f"Unknown solver {solver}")
+        metafunc.parametrize("solver_factory", factories)
