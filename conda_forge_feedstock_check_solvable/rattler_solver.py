@@ -177,6 +177,6 @@ class RattlerSolver:
         return run_exports
 
 
-@cachetools.func.ttl_cache(maxsize=8, ttl=60)
+@cachetools.func.ttl_cache(maxsize=8, ttl=600)
 def rattler_solver_factory(channels, platform):
     return RattlerSolver(list(channels), platform)
