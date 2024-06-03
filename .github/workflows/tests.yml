@@ -63,7 +63,12 @@ jobs:
 
           python -m pip install -v --no-deps --no-build-isolation -e .
 
-      - name: test
+      - name: test w/ rattler
         shell: bash -l {0}
         run: |
-          pytest -vv --durations=0 tests
+          pytest -vv --durations=0 --solver=rattler tests
+
+      - name: test w/ mamba
+        shell: bash -l {0}
+        run: |
+          pytest -vv --durations=0 --solver=mamba tests

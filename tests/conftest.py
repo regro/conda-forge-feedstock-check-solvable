@@ -12,6 +12,15 @@ FEEDSTOCK_DIR = os.path.join(os.path.dirname(__file__), "test_feedstock")
 ALL_SOLVERS = ["rattler", "mamba"]
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--solver",
+        action="append",
+        default=[],
+        help="conda solver to use",
+    )
+
+
 @pytest.fixture()
 def feedstock_dir(tmp_path):
     ci_support = tmp_path / ".ci_support"
@@ -24,14 +33,17 @@ def feedstock_dir(tmp_path):
 
 @pytest.fixture(scope="session", params=ALL_SOLVERS)
 def solver(request):
-    yield request.param
+    solvers = request.config.getoption("solver") or ALL_SOLVERS
+    if request.param in solvers:
+        yield request.param
 
 
 @pytest.fixture(scope="session", params=ALL_SOLVERS)
 def solver_factory(request):
-    if request.param == "mamba":
+    solvers = request.config.getoption("solver") or ALL_SOLVERS
+    if request.param == "mamba" and "mamba" in solvers:
         yield mamba_solver_factory
-    elif request.param == "rattler":
+    elif request.param == "rattler" and "rattler" in solvers:
         yield rattler_solver_factory
     else:
         raise ValueError(f"Unknown solver {request.param}")
