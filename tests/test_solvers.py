@@ -1,24 +1,11 @@
 import pprint
 
-import pytest
 from flaky import flaky
 
-from conda_forge_feedstock_check_solvable.mamba_solver import mamba_solver_factory
-from conda_forge_feedstock_check_solvable.rattler_solver import rattler_solver_factory
 from conda_forge_feedstock_check_solvable.utils import apply_pins, suppress_output
 from conda_forge_feedstock_check_solvable.virtual_packages import (
     virtual_package_repodata,
 )
-
-
-@pytest.fixture(scope="session", params=["rattler", "mamba"])
-def solver_factory(request):
-    if request.param == "mamba":
-        yield mamba_solver_factory
-    elif request.param == "rattler":
-        yield rattler_solver_factory
-    else:
-        raise ValueError(f"Unknown solver {request.param}")
 
 
 @flaky

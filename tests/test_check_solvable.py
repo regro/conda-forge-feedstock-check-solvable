@@ -17,11 +17,6 @@ FEEDSTOCK_DIR = os.path.join(os.path.dirname(__file__), "test_feedstock")
 VERB = 1
 
 
-@pytest.fixture(scope="session", params=["rattler", "mamba"])
-def solver(request):
-    yield request.param
-
-
 @flaky
 def test_is_recipe_solvable_ok(feedstock_dir, solver):
     recipe_file = os.path.join(feedstock_dir, "recipe", "meta.yaml")
@@ -437,7 +432,7 @@ def test_arrow_solvable_timeout(tmp_path, solver):
     for _ in range(6):
         solvable, errors, solvable_by_variant = is_recipe_solvable(
             feedstock_dir,
-            timeout=10,
+            timeout=0.1,
             solver=solver,
             verbosity=VERB,
         )
