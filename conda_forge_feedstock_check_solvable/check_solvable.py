@@ -152,6 +152,7 @@ def _is_recipe_solvable(
 
     additional_channels = additional_channels or []
     additional_channels += [virtual_package_repodata()]
+
     with override_env_var("CONDA_OVERRIDE_GLIBC", "2.%d" % MAX_GLIBC_MINOR):
         errors = []
         cbcs = sorted(glob.glob(os.path.join(feedstock_dir, ".ci_support", "*.yaml")))
