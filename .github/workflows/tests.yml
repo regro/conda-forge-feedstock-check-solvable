@@ -66,7 +66,4 @@ jobs:
       - name: test
         shell: bash -l {0}
         run: |
-          conda config --show pinned_packages
-          cat "${CONDA_PREFIX}/conda-meta/pinned"
-
           pytest -vv --durations=0 tests
