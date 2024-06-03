@@ -441,7 +441,6 @@ def test_arrow_solvable_timeout(tmp_path, solver):
         assert solvable_by_variant == {}
 
 
-@flaky
 @pytest.mark.xfail
 def test_pillow_solvable(tmp_path, solver):
     """pillow acted up for python310"""
