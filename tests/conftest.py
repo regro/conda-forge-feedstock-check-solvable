@@ -11,6 +11,7 @@ FEEDSTOCK_DIR = os.path.join(os.path.dirname(__file__), "test_feedstock")
 
 ALL_SOLVERS = ["rattler", "mamba"]
 
+
 @pytest.fixture()
 def feedstock_dir(tmp_path):
     ci_support = tmp_path / ".ci_support"
