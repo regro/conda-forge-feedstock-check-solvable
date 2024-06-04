@@ -43,6 +43,9 @@ api.Context().add_pip_as_python_dependency = False
 # set strict channel priority
 api.Context().channel_priority = api.ChannelPriority.kStrict
 
+# cache the index
+api.Context().use_index_cache = True
+
 
 @lru_cache(maxsize=128)
 def _make_pool(channels, platform):
