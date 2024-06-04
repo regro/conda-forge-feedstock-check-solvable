@@ -26,6 +26,7 @@ DEFAULT_RUN_EXPORTS = {
 }
 
 MAX_GLIBC_MINOR = 50
+MAX_FUTURE_VERSION = 20
 
 # these characters are start requirements that do not need to be munged from
 # 1.1 to 1.1.*
@@ -54,12 +55,10 @@ MINIMUM_CUDA_VERS = [
     "11.6",
     "11.7",
     "11.8",
-    "12.0",
-    "12.1",
-    "12.2",
-    "12.3",
-    "12.4",
-    "12.5",
+] + [
+    f"{cuda_major}.{cuda_minor}"
+    for cuda_minor in range(MAX_FUTURE_VERSION)
+    for cuda_major in range(12, MAX_FUTURE_VERSION)
 ]
 
 MINIMUM_OSX_64_VERS = [
@@ -74,8 +73,8 @@ MINIMUM_OSX_64_VERS = [
 ]
 MINIMUM_OSX_ARM64_VERS = MINIMUM_OSX_64_VERS + [
     f"{osx_major}.{osx_minor}"
-    for osx_minor in range(0, 17)
-    for osx_major in range(11, 17)
+    for osx_minor in range(0, MAX_FUTURE_VERSION)
+    for osx_major in range(11, MAX_FUTURE_VERSION)
 ]
 
 PROBLEMATIC_REQS = {
