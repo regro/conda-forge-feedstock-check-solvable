@@ -204,7 +204,7 @@ extra:
     - conda-forge/bot
 """,
         )
-    assert is_recipe_solvable(feedstock_dir)[0]
+    assert is_recipe_solvable(feedstock_dir, timeout=None)[0]
 
 
 @flaky
@@ -252,7 +252,9 @@ extra:
     - conda-forge/bot
 """,
         )
-    solvable, errors, solvable_by_variant = is_recipe_solvable(feedstock_dir)
+    solvable, errors, solvable_by_variant = is_recipe_solvable(
+        feedstock_dir, timeout=None
+    )
     print(solvable_by_variant)
     assert not solvable
     # we don't have galsim for this variant so this is an expected failure
@@ -269,8 +271,7 @@ def test_r_base_cross_solvable():
     assert solvable, pprint.pformat(errors)
 
     solvable, errors, _ = is_recipe_solvable(
-        feedstock_dir,
-        build_platform={"osx_arm64": "osx_64"},
+        feedstock_dir, build_platform={"osx_arm64": "osx_64"}, timeout=None
     )
     assert solvable, pprint.pformat(errors)
 
@@ -278,14 +279,14 @@ def test_r_base_cross_solvable():
 @flaky
 def test_xgboost_solvable():
     feedstock_dir = os.path.join(os.path.dirname(__file__), "xgboost-feedstock")
-    solvable, errors, _ = is_recipe_solvable(feedstock_dir)
+    solvable, errors, _ = is_recipe_solvable(feedstock_dir, timeout=None)
     assert solvable, pprint.pformat(errors)
 
 
 @flaky
 def test_pandas_solvable():
     feedstock_dir = os.path.join(os.path.dirname(__file__), "pandas-feedstock")
-    solvable, errors, _ = is_recipe_solvable(feedstock_dir)
+    solvable, errors, _ = is_recipe_solvable(feedstock_dir, timeout=None)
     assert solvable, pprint.pformat(errors)
 
 
@@ -304,7 +305,9 @@ def test_arrow_solvable(tmp_path):
         "https://github.com/conda-forge/arrow-cpp-feedstock",
         ref="main",
     )
-    solvable, errors, solvable_by_variant = is_recipe_solvable(feedstock_dir)
+    solvable, errors, solvable_by_variant = is_recipe_solvable(
+        feedstock_dir, timeout=None
+    )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
 
@@ -317,7 +320,9 @@ def test_guiqwt_solvable(tmp_path):
         "https://github.com/conda-forge/guiqwt-feedstock",
         ref="main",
     )
-    solvable, errors, solvable_by_variant = is_recipe_solvable(feedstock_dir)
+    solvable, errors, solvable_by_variant = is_recipe_solvable(
+        feedstock_dir, timeout=None
+    )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
 
@@ -330,7 +335,9 @@ def test_datalad_solvable(tmp_path):
         "https://github.com/conda-forge/datalad-feedstock",
         ref="main",
     )
-    solvable, errors, solvable_by_variant = is_recipe_solvable(feedstock_dir)
+    solvable, errors, solvable_by_variant = is_recipe_solvable(
+        feedstock_dir, timeout=None
+    )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
 
@@ -343,7 +350,9 @@ def test_grpcio_solvable(tmp_path):
         "https://github.com/conda-forge/grpcio-feedstock",
         ref="main",
     )
-    solvable, errors, solvable_by_variant = is_recipe_solvable(feedstock_dir)
+    solvable, errors, solvable_by_variant = is_recipe_solvable(
+        feedstock_dir, timeout=None
+    )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
 
@@ -361,7 +370,9 @@ def test_cupy_solvable(tmp_path):
         shell=True,
         check=True,
     )
-    solvable, errors, solvable_by_variant = is_recipe_solvable(feedstock_dir)
+    solvable, errors, solvable_by_variant = is_recipe_solvable(
+        feedstock_dir, timeout=None
+    )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
 
@@ -455,7 +466,9 @@ def test_run_exports_constrains_notok(feedstock_dir, tmp_path_factory):
     for cbc in pathlib.Path(feedstock_dir).glob(".ci_support/*.yaml"):
         if cbc.name != "linux_python3.8.____cpython.yaml":
             cbc.unlink()
-    solvable, errors, solvable_by_variant = is_recipe_solvable(feedstock_dir)
+    solvable, errors, solvable_by_variant = is_recipe_solvable(
+        feedstock_dir, timeout=None
+    )
     assert not solvable, pprint.pformat(errors)
 
 
@@ -504,7 +517,7 @@ extra:
     - conda-forge/bot
 """,
         )
-    assert not is_recipe_solvable(feedstock_dir)[0]
+    assert not is_recipe_solvable(feedstock_dir, timeout=None)[0]
 
 
 @flaky
@@ -585,14 +598,13 @@ def test_arrow_solvable_timeout(tmp_path):
     for _ in range(6):
         solvable, errors, solvable_by_variant = is_recipe_solvable(
             feedstock_dir,
-            timeout=10,
+            timeout=0.1,
         )
         assert solvable
         assert errors == []
         assert solvable_by_variant == {}
 
 
-@flaky
 @pytest.mark.xfail
 def test_pillow_solvable(tmp_path):
     """pillow acted up for python310"""
@@ -657,7 +669,9 @@ python_impl:
         check=True,
     )
 
-    solvable, errors, solvable_by_variant = is_recipe_solvable(feedstock_dir)
+    solvable, errors, solvable_by_variant = is_recipe_solvable(
+        feedstock_dir, timeout=None
+    )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
     assert any("python3.10" in k for k in solvable_by_variant)

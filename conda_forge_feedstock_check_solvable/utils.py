@@ -1,3 +1,4 @@
+import atexit
 import contextlib
 import copy
 import functools
@@ -5,6 +6,7 @@ import io
 import os
 import subprocess
 import tempfile
+import time
 import traceback
 from collections.abc import Mapping
 
@@ -40,6 +42,8 @@ ALL_PLATFORMS = {
     "win-64",
 }
 
+MAX_FUTURE_VERSION = 20
+
 MINIMUM_CUDA_VERS = [
     "9.2",
     "10.0",
@@ -54,12 +58,10 @@ MINIMUM_CUDA_VERS = [
     "11.6",
     "11.7",
     "11.8",
-    "12.0",
-    "12.1",
-    "12.2",
-    "12.3",
-    "12.4",
-    "12.5",
+] + [
+    f"{cuda_major}.{cuda_minor}"
+    for cuda_minor in range(MAX_FUTURE_VERSION)
+    for cuda_major in range(12, MAX_FUTURE_VERSION)
 ]
 
 MINIMUM_OSX_64_VERS = [
@@ -74,8 +76,8 @@ MINIMUM_OSX_64_VERS = [
 ]
 MINIMUM_OSX_ARM64_VERS = MINIMUM_OSX_64_VERS + [
     f"{osx_major}.{osx_minor}"
-    for osx_minor in range(0, 17)
-    for osx_major in range(11, 17)
+    for osx_minor in range(0, MAX_FUTURE_VERSION)
+    for osx_major in range(11, MAX_FUTURE_VERSION)
 ]
 
 PROBLEMATIC_REQS = {
@@ -145,6 +147,60 @@ def override_env_var(name, value):
             del os.environ[name]
         else:
             os.environ[name] = old_value
+
+
+TIMER_RECORDS = {}
+
+
+def _print_timer_records():
+    for k, v in TIMER_RECORDS.items():
+        print(f"{k}: {v} seconds", flush=True)
+
+
+atexit.register(_print_timer_records)
+
+
+@contextlib.contextmanager
+def timer(name, suppress_output=False, summary_only=True):
+    from conda_forge_feedstock_check_solvable.utils import (
+        suppress_output as _suppress_output,
+    )
+
+    start = time.time()
+    if suppress_output:
+        with _suppress_output():
+            yield
+    else:
+        yield
+    dt = time.time() - start
+    if name not in TIMER_RECORDS:
+        TIMER_RECORDS[name] = 0
+    TIMER_RECORDS[name] += dt
+    if not summary_only:
+        print(f"{name:32s}: {dt:0.2g} seconds", flush=True)
+
+
+class TimeoutTimerException(Exception):
+    pass
+
+
+class TimeoutTimer:
+    def __init__(self, timeout, name=None):
+        self.timeout = timeout
+        self.name = name
+        self._start = time.time()
+
+    @property
+    def elapsed(self):
+        return time.time() - self._start
+
+    @property
+    def remaining(self):
+        return self.timeout - self.elapsed
+
+    def raise_for_timeout(self):
+        if self.elapsed > self.timeout:
+            raise TimeoutTimerException("timeout out for %s" % self.name)
 
 
 @contextlib.contextmanager

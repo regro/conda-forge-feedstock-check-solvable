@@ -12,9 +12,9 @@ https://gist.github.com/wolfv/cd12bd4a448c77ff02368e97ffdf495a.
 
 import copy
 import pprint
+from functools import lru_cache
 from typing import List, Tuple
 
-import cachetools.func
 import libmambapy as api
 import rapidjson as json
 from conda.base.context import context
@@ -27,7 +27,11 @@ from conda_forge_feedstock_check_solvable.utils import (
     get_run_exports,
     print_debug,
     print_warning,
+    timer,
 )
+
+# @cachetools.func.ttl_cache(maxsize=8, ttl=60)
+
 
 pkgs_dirs = context.pkgs_dirs
 
@@ -38,6 +42,25 @@ api.Context().add_pip_as_python_dependency = False
 
 # set strict channel priority
 api.Context().channel_priority = api.ChannelPriority.kStrict
+
+
+@lru_cache(maxsize=128)
+def _make_pool(channels, platform):
+    with timer("mamba solver init", suppress_output=True):
+        pool = api.Pool()
+        repos = []
+        load_channels(
+            pool,
+            channels,
+            repos,
+            platform=platform,
+            has_priority=True,
+        )
+        for repo in repos:
+            # need set_installed for add_pin, not sure why
+            repo.set_installed()
+
+    return pool
 
 
 class MambaSolver:
@@ -59,19 +82,7 @@ class MambaSolver:
     def __init__(self, channels, platform):
         self.channels = channels
         self.platform = platform
-        self.pool = api.Pool()
-
-        self.repos = []
-        self.index = load_channels(
-            self.pool,
-            self.channels,
-            self.repos,
-            platform=platform,
-            has_priority=True,
-        )
-        for repo in self.repos:
-            # need set_installed for add_pin, not sure why
-            repo.set_installed()
+        self._pool = _make_pool(tuple(channels), platform)
 
     def solve(
         self,
@@ -111,69 +122,70 @@ class MambaSolver:
             A dictionary with the weak and strong run exports for the packages.
             Only returned if get_run_exports is True.
         """
-        ignore_run_exports_from = ignore_run_exports_from or []
-        ignore_run_exports = ignore_run_exports or []
+        with timer("mamba solver solve"):
+            ignore_run_exports_from = ignore_run_exports_from or []
+            ignore_run_exports = ignore_run_exports or []
 
-        solver_options = [(api.SOLVER_FLAG_ALLOW_DOWNGRADE, 1)]
-        solver = api.Solver(self.pool, solver_options)
+            solver_options = [(api.SOLVER_FLAG_ALLOW_DOWNGRADE, 1)]
+            solver = api.Solver(self._pool, solver_options)
 
-        _specs = [convert_spec_to_conda_build(s) for s in specs]
-        _constraints = [convert_spec_to_conda_build(s) for s in constraints or []]
+            _specs = [convert_spec_to_conda_build(s) for s in specs]
+            _constraints = [convert_spec_to_conda_build(s) for s in constraints or []]
 
-        print_debug(
-            "MAMBA running solver for specs \n\n%s\nconstraints: %s\n",
-            pprint.pformat(_specs),
-            pprint.pformat(_constraints),
-        )
-        for constraint in _constraints:
-            solver.add_pin(constraint)
-
-        solver.add_jobs(_specs, api.SOLVER_INSTALL)
-        success = solver.solve()
-
-        err = None
-        if not success:
-            print_warning(
-                "MAMBA failed to solve specs \n\n%s\n\nfor channels "
-                "\n\n%s\n\nThe reported errors are:\n\n%s\n",
+            print_debug(
+                "MAMBA running solver for specs \n\n%s\nconstraints: %s\n",
                 pprint.pformat(_specs),
-                pprint.pformat(self.channels),
-                solver.explain_problems(),
+                pprint.pformat(_constraints),
             )
-            err = solver.explain_problems()
-            solution = None
-            run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
-        else:
-            t = api.Transaction(
-                self.pool,
-                solver,
-                PACKAGE_CACHE,
-            )
+            for constraint in _constraints:
+                solver.add_pin(constraint)
 
-            solution = []
-            _, to_link, _ = t.to_conda()
-            for _, _, jdata in to_link:
-                data = json.loads(jdata)
-                solution.append(
-                    " ".join([data["name"], data["version"], data["build"]]),
+            solver.add_jobs(_specs, api.SOLVER_INSTALL)
+            success = solver.solve()
+
+            err = None
+            if not success:
+                print_warning(
+                    "MAMBA failed to solve specs \n\n%s\n\nfor channels "
+                    "\n\n%s\n\nThe reported errors are:\n\n%s\n",
+                    pprint.pformat(_specs),
+                    pprint.pformat(self.channels),
+                    solver.explain_problems(),
                 )
+                err = solver.explain_problems()
+                solution = None
+                run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
+            else:
+                t = api.Transaction(
+                    self._pool,
+                    solver,
+                    PACKAGE_CACHE,
+                )
+
+                solution = []
+                _, to_link, _ = t.to_conda()
+                for _, _, jdata in to_link:
+                    data = json.loads(jdata)
+                    solution.append(
+                        " ".join([data["name"], data["version"], data["build"]]),
+                    )
+
+                if get_run_exports:
+                    print_debug(
+                        "MAMBA getting run exports for \n\n%s\n",
+                        pprint.pformat(solution),
+                    )
+                    run_exports = self._get_run_exports(
+                        to_link,
+                        _specs,
+                        ignore_run_exports_from,
+                        ignore_run_exports,
+                    )
 
             if get_run_exports:
-                print_debug(
-                    "MAMBA getting run exports for \n\n%s\n",
-                    pprint.pformat(solution),
-                )
-                run_exports = self._get_run_exports(
-                    to_link,
-                    _specs,
-                    ignore_run_exports_from,
-                    ignore_run_exports,
-                )
-
-        if get_run_exports:
-            return success, err, solution, run_exports
-        else:
-            return success, err, solution
+                return success, err, solution, run_exports
+            else:
+                return success, err, solution
 
     def _get_run_exports(
         self,
@@ -206,6 +218,6 @@ class MambaSolver:
         return run_exports
 
 
-@cachetools.func.ttl_cache(maxsize=8, ttl=60)
+@lru_cache(maxsize=128)
 def _mamba_factory(channels, platform):
     return MambaSolver(list(channels), platform)

@@ -1,4 +1,5 @@
 import glob
+import math
 import os
 from typing import Dict, List, Tuple
 
@@ -9,6 +10,8 @@ from ruamel.yaml import YAML
 from conda_forge_feedstock_check_solvable.mamba_solver import _mamba_factory
 from conda_forge_feedstock_check_solvable.utils import (
     MAX_GLIBC_MINOR,
+    TimeoutTimer,
+    TimeoutTimerException,
     apply_pins,
     get_run_exports,
     override_env_var,
@@ -16,26 +19,11 @@ from conda_forge_feedstock_check_solvable.utils import (
     print_info,
     print_warning,
     remove_reqs_by_name,
-    suppress_output,
+    timer,
 )
 from conda_forge_feedstock_check_solvable.virtual_packages import (
     virtual_package_repodata,
 )
-
-
-def _func(feedstock_dir, additional_channels, build_platform, verbosity, conn):
-    try:
-        res = _is_recipe_solvable(
-            feedstock_dir,
-            additional_channels=additional_channels,
-            build_platform=build_platform,
-            verbosity=verbosity,
-        )
-        conn.send(res)
-    except Exception as e:
-        conn.send(e)
-    finally:
-        conn.close()
 
 
 def is_recipe_solvable(
@@ -62,6 +50,10 @@ def is_recipe_solvable(
         If not None, then the work will be run in a separate process and
         this function will return True if the work doesn't complete before `timeout`
         seconds.
+    build_platform : dict, optional
+        A dictionary mapping the target platform-arch to the platform-arch for the build.
+        If not given, the target platform-arch is assumed to be the same as the build
+        platform-arch.
     verbosity : int
         An int indicating the level of verbosity from 0 (no output) to 3
         (gobbs of output).
@@ -76,55 +68,18 @@ def is_recipe_solvable(
     solvable_by_variant : dict
         A lookup by variant config that shows if a particular config is solvable
     """
-    if timeout:
-        from multiprocessing import Pipe, Process
 
-        parent_conn, child_conn = Pipe()
-        p = Process(
-            target=_func,
-            args=(
-                feedstock_dir,
-                additional_channels,
-                build_platform,
-                verbosity,
-                child_conn,
-            ),
-        )
-        p.start()
-        if parent_conn.poll(timeout):
-            res = parent_conn.recv()
-            if isinstance(res, Exception):
-                res = (
-                    False,
-                    [repr(res)],
-                    {},
-                )
-        else:
-            print_warning("SOLVER TIMEOUT for %s", feedstock_dir)
-            res = (
-                True,
-                [],
-                {},
-            )
-
-        parent_conn.close()
-
-        p.join(0)
-        p.terminate()
-        p.kill()
-        try:
-            p.close()
-        except ValueError:
-            pass
-    else:
-        res = _is_recipe_solvable(
+    try:
+        return _is_recipe_solvable(
             feedstock_dir,
             additional_channels=additional_channels,
             build_platform=build_platform,
             verbosity=verbosity,
+            timeout_timer=TimeoutTimer(timeout or math.inf, name="is_recipe_solvable"),
         )
-
-    return res
+    except TimeoutTimerException:
+        print_warning("SOLVER TIMEOUT for %s", feedstock_dir)
+        return True, [], {}
 
 
 def _is_recipe_solvable(
@@ -132,6 +87,7 @@ def _is_recipe_solvable(
     additional_channels=(),
     build_platform=None,
     verbosity=1,
+    timeout_timer=None,
 ) -> Tuple[bool, List[str], Dict[str, bool]]:
     global VERBOSITY
     VERBOSITY = verbosity
@@ -140,6 +96,9 @@ def _is_recipe_solvable(
 
     additional_channels = additional_channels or []
     additional_channels += [virtual_package_repodata()]
+
+    if timeout_timer:
+        timeout_timer.raise_for_timeout()
 
     with override_env_var("CONDA_OVERRIDE_GLIBC", "2.%d" % MAX_GLIBC_MINOR):
         errors = []
@@ -165,6 +124,9 @@ def _is_recipe_solvable(
         solvable = True
         solvable_by_cbc = {}
         for cbc_fname in cbcs:
+            if timeout_timer:
+                timeout_timer.raise_for_timeout()
+
             # we need to extract the platform (e.g., osx, linux) and arch (e.g., 64, aarm64)
             # conda smithy forms a string that is
             #
@@ -188,6 +150,7 @@ def _is_recipe_solvable(
                     build_platform.get(f"{platform}_{arch}", f"{platform}_{arch}")
                 ),
                 additional_channels=additional_channels,
+                timeout_timer=timeout_timer,
             )
             solvable = solvable and _solvable
             cbc_name = os.path.basename(cbc_fname).rsplit(".", maxsplit=1)[0]
@@ -204,6 +167,7 @@ def _is_recipe_solvable_on_platform(
     arch,
     build_platform_arch=None,
     additional_channels=(),
+    timeout_timer=None,
 ):
     # parse the channel sources from the CBC
     parser = YAML(typ="jinja2")
@@ -238,7 +202,7 @@ def _is_recipe_solvable_on_platform(
     # it would be used in a real build
     print_debug("rendering recipe with conda build")
 
-    with suppress_output():
+    with timer("conda_build.api.render", suppress_output=True):
         for att in range(2):
             try:
                 if att == 1:
@@ -272,6 +236,9 @@ def _is_recipe_solvable_on_platform(
             channel_urls=channel_sources,
         )
 
+    if timeout_timer:
+        timeout_timer.raise_for_timeout()
+
     # get build info
     if build_platform_arch is not None:
         build_platform, build_arch = build_platform_arch.split("_")
@@ -281,104 +248,129 @@ def _is_recipe_solvable_on_platform(
     # now we loop through each one and check if we can solve it
     # we check run and host and ignore the rest
     print_debug("getting mamba solver")
-    with suppress_output():
-        solver = _mamba_factory(tuple(channel_sources), f"{platform}-{arch}")
-        build_solver = _mamba_factory(
-            tuple(channel_sources),
-            f"{build_platform}-{build_arch}",
-        )
-    solvable = True
-    errors = []
-    outnames = [m.name() for m, _, _ in metas]
-    for m, _, _ in metas:
-        print_debug("checking recipe %s", m.name())
+    # with suppress_output():
+    solver = _mamba_factory(tuple(channel_sources), f"{platform}-{arch}")
+    if timeout_timer:
+        timeout_timer.raise_for_timeout()
 
-        build_req = m.get_value("requirements/build", [])
-        host_req = m.get_value("requirements/host", [])
-        run_req = m.get_value("requirements/run", [])
-        run_constrained = m.get_value("requirements/run_constrained", [])
+    build_solver = _mamba_factory(
+        tuple(channel_sources),
+        f"{build_platform}-{build_arch}",
+    )
+    if timeout_timer:
+        timeout_timer.raise_for_timeout()
 
-        ign_runex = m.get_value("build/ignore_run_exports", [])
-        ign_runex_from = m.get_value("build/ignore_run_exports_from", [])
+    with timer("checking solvability"):
+        solvable = True
+        errors = []
+        outnames = [m.name() for m, _, _ in metas]
+        for m, _, _ in metas:
+            if timeout_timer:
+                timeout_timer.raise_for_timeout()
 
-        if build_req:
-            build_req = remove_reqs_by_name(build_req, outnames)
-            _solvable, _err, build_req, build_rx = build_solver.solve(
-                build_req,
-                get_run_exports=True,
-                ignore_run_exports_from=ign_runex_from,
-                ignore_run_exports=ign_runex,
-            )
-            solvable = solvable and _solvable
-            if _err is not None:
-                errors.append(_err)
+            print_debug("checking recipe %s", m.name())
 
-            run_constrained = list(set(run_constrained) | build_rx["strong_constrains"])
+            build_req = m.get_value("requirements/build", [])
+            host_req = m.get_value("requirements/host", [])
+            run_req = m.get_value("requirements/run", [])
+            run_constrained = m.get_value("requirements/run_constrained", [])
 
-            if m.is_cross:
-                host_req = list(set(host_req) | build_rx["strong"])
-                if not (m.noarch or m.noarch_python):
-                    run_req = list(set(run_req) | build_rx["strong"])
-            else:
-                if m.noarch or m.noarch_python:
-                    if m.build_is_host:
-                        run_req = list(set(run_req) | build_rx["noarch"])
-                else:
-                    run_req = list(set(run_req) | build_rx["strong"])
-                    if m.build_is_host:
-                        run_req = list(set(run_req) | build_rx["weak"])
-                        run_constrained = list(
-                            set(run_constrained) | build_rx["weak_constrains"]
-                        )
-                    else:
-                        host_req = list(set(host_req) | build_rx["strong"])
+            ign_runex = m.get_value("build/ignore_run_exports", [])
+            ign_runex_from = m.get_value("build/ignore_run_exports_from", [])
 
-        if host_req:
-            host_req = remove_reqs_by_name(host_req, outnames)
-            _solvable, _err, host_req, host_rx = solver.solve(
-                host_req,
-                get_run_exports=True,
-                ignore_run_exports_from=ign_runex_from,
-                ignore_run_exports=ign_runex,
-            )
-            solvable = solvable and _solvable
-            if _err is not None:
-                errors.append(_err)
-
-            if m.is_cross:
-                if m.noarch or m.noarch_python:
-                    run_req = list(set(run_req) | host_rx["noarch"])
-                else:
-                    run_req = list(set(run_req) | host_rx["weak"] | host_rx["strong"])
+            if build_req:
+                build_req = remove_reqs_by_name(build_req, outnames)
+                _solvable, _err, build_req, build_rx = build_solver.solve(
+                    build_req,
+                    get_run_exports=True,
+                    ignore_run_exports_from=ign_runex_from,
+                    ignore_run_exports=ign_runex,
+                )
+                solvable = solvable and _solvable
+                if _err is not None:
+                    errors.append(_err)
 
                 run_constrained = list(
-                    set(run_constrained)
-                    | host_rx["weak_constrains"]
-                    | host_rx["strong_constrains"]
+                    set(run_constrained) | build_rx["strong_constrains"]
                 )
 
-        run_constrained = apply_pins(
-            run_constrained, host_req or [], build_req or [], outnames, m
-        )
-        if run_req:
-            run_req = apply_pins(run_req, host_req or [], build_req or [], outnames, m)
-            run_req = remove_reqs_by_name(run_req, outnames)
-            _solvable, _err, _ = solver.solve(run_req, constraints=run_constrained)
-            solvable = solvable and _solvable
-            if _err is not None:
-                errors.append(_err)
+                if m.is_cross:
+                    host_req = list(set(host_req) | build_rx["strong"])
+                    if not (m.noarch or m.noarch_python):
+                        run_req = list(set(run_req) | build_rx["strong"])
+                else:
+                    if m.noarch or m.noarch_python:
+                        if m.build_is_host:
+                            run_req = list(set(run_req) | build_rx["noarch"])
+                    else:
+                        run_req = list(set(run_req) | build_rx["strong"])
+                        if m.build_is_host:
+                            run_req = list(set(run_req) | build_rx["weak"])
+                            run_constrained = list(
+                                set(run_constrained) | build_rx["weak_constrains"]
+                            )
+                        else:
+                            host_req = list(set(host_req) | build_rx["strong"])
 
-        tst_req = (
-            m.get_value("test/requires", [])
-            + m.get_value("test/requirements", [])
-            + run_req
-        )
-        if tst_req:
-            tst_req = remove_reqs_by_name(tst_req, outnames)
-            _solvable, _err, _ = solver.solve(tst_req, constraints=run_constrained)
-            solvable = solvable and _solvable
-            if _err is not None:
-                errors.append(_err)
+            if timeout_timer:
+                timeout_timer.raise_for_timeout()
+
+            if host_req:
+                host_req = remove_reqs_by_name(host_req, outnames)
+                _solvable, _err, host_req, host_rx = solver.solve(
+                    host_req,
+                    get_run_exports=True,
+                    ignore_run_exports_from=ign_runex_from,
+                    ignore_run_exports=ign_runex,
+                )
+                solvable = solvable and _solvable
+                if _err is not None:
+                    errors.append(_err)
+
+                if m.is_cross:
+                    if m.noarch or m.noarch_python:
+                        run_req = list(set(run_req) | host_rx["noarch"])
+                    else:
+                        run_req = list(
+                            set(run_req) | host_rx["weak"] | host_rx["strong"]
+                        )
+
+                    run_constrained = list(
+                        set(run_constrained)
+                        | host_rx["weak_constrains"]
+                        | host_rx["strong_constrains"]
+                    )
+
+            if timeout_timer:
+                timeout_timer.raise_for_timeout()
+
+            run_constrained = apply_pins(
+                run_constrained, host_req or [], build_req or [], outnames, m
+            )
+            if run_req:
+                run_req = apply_pins(
+                    run_req, host_req or [], build_req or [], outnames, m
+                )
+                run_req = remove_reqs_by_name(run_req, outnames)
+                _solvable, _err, _ = solver.solve(run_req, constraints=run_constrained)
+                solvable = solvable and _solvable
+                if _err is not None:
+                    errors.append(_err)
+
+            if timeout_timer:
+                timeout_timer.raise_for_timeout()
+
+            tst_req = (
+                m.get_value("test/requires", [])
+                + m.get_value("test/requirements", [])
+                + run_req
+            )
+            if tst_req:
+                tst_req = remove_reqs_by_name(tst_req, outnames)
+                _solvable, _err, _ = solver.solve(tst_req, constraints=run_constrained)
+                solvable = solvable and _solvable
+                if _err is not None:
+                    errors.append(_err)
 
     print_info("RUN EXPORT CACHE STATUS: %s", get_run_exports.cache_info())
     print_info(

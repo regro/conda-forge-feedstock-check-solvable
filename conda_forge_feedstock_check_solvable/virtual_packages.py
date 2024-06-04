@@ -2,7 +2,6 @@ import atexit
 import functools
 import os
 import pathlib
-import subprocess
 import tempfile
 import time
 from collections import defaultdict
@@ -130,22 +129,8 @@ def virtual_package_repodata():
     for glibc_minor in range(12, MAX_GLIBC_MINOR + 1):
         repodata.add_package(FakePackage("__glibc", "2.%d" % glibc_minor))
 
-    # cuda - get from cuda-version on conda-forge
-    try:
-        cuda_pkgs = json.loads(
-            subprocess.check_output(
-                "CONDA_SUBDIR=linux-64 conda search cuda-version -c conda-forge --json",
-                shell=True,
-                text=True,
-                stderr=subprocess.PIPE,
-            )
-        )
-        cuda_vers = [pkg["version"] for pkg in cuda_pkgs["cuda-version"]]
-    except Exception:
-        cuda_vers = []
-    # extra hard coded list to make sure we don't miss anything
-    cuda_vers += MINIMUM_CUDA_VERS
-    cuda_vers = set(cuda_vers)
+    # cuda
+    cuda_vers = set(MINIMUM_CUDA_VERS)
     for cuda_ver in cuda_vers:
         repodata.add_package(FakePackage("__cuda", cuda_ver))
 
