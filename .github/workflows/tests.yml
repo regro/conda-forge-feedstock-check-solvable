@@ -66,4 +66,4 @@ jobs:
       - name: test
         shell: bash -l {0}
         run: |
-          pytest -vv --durations=0 tests
+          pytest -vvs --durations=0 tests
