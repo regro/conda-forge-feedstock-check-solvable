@@ -26,7 +26,7 @@ from conda_forge_feedstock_check_solvable.utils import (
     convert_spec_to_conda_build,
     get_run_exports,
     print_debug,
-    print_warning,
+    print_info,
     timer,
 )
 
@@ -49,6 +49,7 @@ api.Context().use_index_cache = True
 
 @lru_cache(maxsize=128)
 def _make_pool(channels, platform):
+    print(f"MAMBA cache miss: {channels} {platform}", flush=True)
     with timer("mamba solver init", suppress_output=True):
         pool = api.Pool()
         repos = []
@@ -148,7 +149,7 @@ class MambaSolver:
 
             err = None
             if not success:
-                print_warning(
+                print_info(
                     "MAMBA failed to solve specs \n\n%s\n\nwith constraints \n\n%s\n\nfor channels "
                     "\n\n%s\n\nThe reported errors are:\n\n%s\n",
                     pprint.pformat(_specs),
@@ -222,6 +223,5 @@ class MambaSolver:
         return run_exports
 
 
-@lru_cache(maxsize=128)
 def _mamba_factory(channels, platform):
     return MambaSolver(list(channels), platform)
