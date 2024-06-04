@@ -28,6 +28,7 @@ DEFAULT_RUN_EXPORTS = {
 }
 
 MAX_GLIBC_MINOR = 50
+MAX_FUTURE_VERSION = 20
 
 # these characters are start requirements that do not need to be munged from
 # 1.1 to 1.1.*
