@@ -146,9 +146,10 @@ class MambaSolver:
             err = None
             if not success:
                 print_warning(
-                    "MAMBA failed to solve specs \n\n%s\n\nfor channels "
+                    "MAMBA failed to solve specs \n\n%s\n\nwith constraints \n\n%s\n\nfor channels "
                     "\n\n%s\n\nThe reported errors are:\n\n%s\n",
                     pprint.pformat(_specs),
+                    pprint.pformat(_constraints),
                     pprint.pformat(self.channels),
                     solver.explain_problems(),
                 )

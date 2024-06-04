@@ -161,7 +161,7 @@ atexit.register(_print_timer_records)
 
 
 @contextlib.contextmanager
-def timer(name, suppress_output=False, summary_only=True):
+def timer(name, suppress_output=False, summary_only=False):
     from conda_forge_feedstock_check_solvable.utils import (
         suppress_output as _suppress_output,
     )
