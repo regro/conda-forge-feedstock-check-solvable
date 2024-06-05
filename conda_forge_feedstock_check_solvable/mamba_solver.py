@@ -28,6 +28,7 @@ from conda_forge_feedstock_check_solvable.utils import (
     get_run_exports,
     print_debug,
     print_warning,
+    suppress_output,
 )
 
 pkgs_dirs = context.pkgs_dirs
@@ -39,6 +40,42 @@ api.Context().add_pip_as_python_dependency = False
 
 # set strict channel priority
 api.Context().channel_priority = api.ChannelPriority.kStrict
+
+
+def _get_pool(channels, platform, constraints):
+    with suppress_output():
+        pool = api.Pool()
+
+        repos = []
+        load_channels(
+            pool,
+            channels,
+            repos,
+            platform=platform,
+            has_priority=True,
+        )
+        for repo in repos:
+            # need set_installed for add_pin, not sure why
+            repo.set_installed()
+
+    return pool
+
+
+def _get_solver(channels, platform, constraints):
+    pool = _get_pool(channels, platform, constraints)
+
+    solver_options = [(api.SOLVER_FLAG_ALLOW_DOWNGRADE, 1)]
+    solver = api.Solver(pool, solver_options)
+
+    for constraint in constraints:
+        solver.add_pin(constraint)
+
+    return solver, pool
+
+
+@lru_cache(maxsize=128)
+def _get_solver_cached(channels, platform, constraints):
+    return _get_solver(channels, platform, constraints)
 
 
 class MambaSolver:
@@ -57,22 +94,10 @@ class MambaSolver:
     >>> solver.solve(["xtensor 0.18"])
     """
 
-    def __init__(self, channels, platform):
+    def __init__(self, channels, platform, _use_cache=False):
         self.channels = channels
         self.platform = platform
-        self.pool = api.Pool()
-
-        self.repos = []
-        self.index = load_channels(
-            self.pool,
-            self.channels,
-            self.repos,
-            platform=platform,
-            has_priority=True,
-        )
-        for repo in self.repos:
-            # need set_installed for add_pin, not sure why
-            repo.set_installed()
+        self._use_cache = _use_cache
 
     def solve(
         self,
@@ -121,19 +146,23 @@ class MambaSolver:
         ignore_run_exports_from = ignore_run_exports_from or []
         ignore_run_exports = ignore_run_exports or []
 
-        solver_options = [(api.SOLVER_FLAG_ALLOW_DOWNGRADE, 1)]
-        solver = api.Solver(self.pool, solver_options)
-
         _specs = [convert_spec_to_conda_build(s) for s in specs]
         _constraints = [convert_spec_to_conda_build(s) for s in constraints or []]
+
+        if self._use_cache:
+            solver, pool = _get_solver_cached(
+                self.channels, self.platform, tuple(_constraints)
+            )
+        else:
+            solver, pool = _get_solver(
+                self.channels, self.platform, tuple(_constraints)
+            )
 
         print_debug(
             "MAMBA running solver for specs \n\n%s\nconstraints: %s\n",
             pprint.pformat(_specs),
             pprint.pformat(_constraints),
         )
-        for constraint in _constraints:
-            solver.add_pin(constraint)
 
         solver.add_jobs(_specs, api.SOLVER_INSTALL)
         success = solver.solve()
@@ -143,10 +172,12 @@ class MambaSolver:
             print_warning(
                 "MAMBA failed to solve specs \n\n%s\n\nwith "
                 "constraints \n\n%s\n\nfor channels "
+                "\n\n%s\n\non platform "
                 "\n\n%s\n\nThe reported errors are:\n\n%s\n",
                 textwrap.indent(pprint.pformat(_specs), "    "),
                 textwrap.indent(pprint.pformat(_constraints), "    "),
                 textwrap.indent(pprint.pformat(self.channels), "    "),
+                textwrap.indent(pprint.pformat(self.platform), "    "),
                 textwrap.indent(solver.explain_problems(), "    "),
             )
             err = solver.explain_problems()
@@ -154,7 +185,7 @@ class MambaSolver:
             run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
         else:
             t = api.Transaction(
-                self.pool,
+                pool,
                 solver,
                 PACKAGE_CACHE,
             )
@@ -215,6 +246,5 @@ class MambaSolver:
         return run_exports
 
 
-@lru_cache(maxsize=128)
 def mamba_solver_factory(channels, platform):
-    return MambaSolver(list(channels), platform)
+    return MambaSolver(tuple(channels), platform, _use_cache=True)

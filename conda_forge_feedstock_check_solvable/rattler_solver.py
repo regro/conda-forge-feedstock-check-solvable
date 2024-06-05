@@ -133,10 +133,12 @@ class RattlerSolver:
             print_warning(
                 "MAMBA failed to solve specs \n\n%s\n\nwith "
                 "constraints \n\n%s\n\nfor channels "
+                "\n\n%s\n\non platform "
                 "\n\n%s\n\nThe reported errors are:\n\n%s\n",
                 textwrap.indent(pprint.pformat(specs), "    "),
                 textwrap.indent(pprint.pformat(constraints), "    "),
                 textwrap.indent(pprint.pformat(self.channels), "    "),
+                textwrap.indent(pprint.pformat(self.platform_arch), "    "),
                 textwrap.indent(err, "    "),
             )
             success = False

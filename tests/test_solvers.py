@@ -1,7 +1,18 @@
+import inspect
 import pprint
 
+import pytest
 from flaky import flaky
 
+from conda_forge_feedstock_check_solvable.mamba_solver import (
+    MambaSolver,
+    _get_solver_cached,
+    mamba_solver_factory,
+)
+from conda_forge_feedstock_check_solvable.rattler_solver import (
+    RattlerSolver,
+    rattler_solver_factory,
+)
 from conda_forge_feedstock_check_solvable.utils import apply_pins, suppress_output
 from conda_forge_feedstock_check_solvable.virtual_packages import (
     virtual_package_repodata,
@@ -215,3 +226,145 @@ def test_solvers_hang(solver_factory):
             ],
         )
     assert res[0]
+
+
+@pytest.mark.parametrize("mamba_factory", [MambaSolver, mamba_solver_factory])
+@pytest.mark.parametrize("rattler_factory", [RattlerSolver, rattler_solver_factory])
+def test_solvers_compare_output(mamba_factory, rattler_factory):
+    specs_linux = (
+        "libutf8proc >=2.8.0,<3.0a0",
+        "orc >=2.0.1,<2.0.2.0a0",
+        "glog >=0.7.0,<0.8.0a0",
+        "libabseil * cxx17*",
+        "libgcc-ng >=12",
+        "libbrotlidec >=1.1.0,<1.2.0a0",
+        "bzip2 >=1.0.8,<2.0a0",
+        "libbrotlienc >=1.1.0,<1.2.0a0",
+        "libgoogle-cloud-storage >=2.24.0,<2.25.0a0",
+        "libstdcxx-ng >=12",
+        "re2",
+        "gflags >=2.2.2,<2.3.0a0",
+        "libabseil >=20240116.2,<20240117.0a0",
+        "libre2-11 >=2023.9.1,<2024.0a0",
+        "libgoogle-cloud >=2.24.0,<2.25.0a0",
+        "lz4-c >=1.9.3,<1.10.0a0",
+        "libbrotlicommon >=1.1.0,<1.2.0a0",
+        "aws-sdk-cpp >=1.11.329,<1.11.330.0a0",
+        "snappy >=1.2.0,<1.3.0a0",
+        "zstd >=1.5.6,<1.6.0a0",
+        "aws-crt-cpp >=0.26.9,<0.26.10.0a0",
+        "libzlib >=1.2.13,<2.0a0",
+    )
+    constraints_linux = ("apache-arrow-proc * cpu", "arrow-cpp <0.0a0")
+
+    specs_linux_again = (
+        "glog >=0.7.0,<0.8.0a0",
+        "bzip2 >=1.0.8,<2.0a0",
+        "lz4-c >=1.9.3,<1.10.0a0",
+        "libbrotlidec >=1.1.0,<1.2.0a0",
+        "zstd >=1.5.6,<1.6.0a0",
+        "gflags >=2.2.2,<2.3.0a0",
+        "libzlib >=1.2.13,<2.0a0",
+        "libbrotlienc >=1.1.0,<1.2.0a0",
+        "re2",
+        "aws-sdk-cpp >=1.11.329,<1.11.330.0a0",
+        "libgoogle-cloud-storage >=2.24.0,<2.25.0a0",
+        "libgoogle-cloud >=2.24.0,<2.25.0a0",
+        "libstdcxx-ng >=12",
+        "libutf8proc >=2.8.0,<3.0a0",
+        "libabseil * cxx17*",
+        "snappy >=1.2.0,<1.3.0a0",
+        "__glibc >=2.17,<3.0.a0",
+        "orc >=2.0.1,<2.0.2.0a0",
+        "libgcc-ng >=12",
+        "libabseil >=20240116.2,<20240117.0a0",
+        "libbrotlicommon >=1.1.0,<1.2.0a0",
+        "libre2-11 >=2023.9.1,<2024.0a0",
+        "aws-crt-cpp >=0.26.9,<0.26.10.0a0",
+    )
+    constraints_linux_again = ("arrow-cpp <0.0a0", "apache-arrow-proc * cuda")
+
+    specs_win = (
+        "re2",
+        "libabseil * cxx17*",
+        "vc >=14.2,<15",
+        "libbrotlidec >=1.1.0,<1.2.0a0",
+        "lz4-c >=1.9.3,<1.10.0a0",
+        "aws-sdk-cpp >=1.11.329,<1.11.330.0a0",
+        "libbrotlicommon >=1.1.0,<1.2.0a0",
+        "snappy >=1.2.0,<1.3.0a0",
+        "ucrt >=10.0.20348.0",
+        "orc >=2.0.1,<2.0.2.0a0",
+        "zstd >=1.5.6,<1.6.0a0",
+        "libcrc32c >=1.1.2,<1.2.0a0",
+        "libre2-11 >=2023.9.1,<2024.0a0",
+        "libbrotlienc >=1.1.0,<1.2.0a0",
+        "libcurl >=8.8.0,<9.0a0",
+        "libabseil >=20240116.2,<20240117.0a0",
+        "bzip2 >=1.0.8,<2.0a0",
+        "libgoogle-cloud >=2.24.0,<2.25.0a0",
+        "vc14_runtime >=14.29.30139",
+        "libzlib >=1.2.13,<2.0a0",
+        "libgoogle-cloud-storage >=2.24.0,<2.25.0a0",
+        "libutf8proc >=2.8.0,<3.0a0",
+        "aws-crt-cpp >=0.26.9,<0.26.10.0a0",
+    )
+    constraints_win = ("arrow-cpp <0.0a0", "apache-arrow-proc * cuda")
+
+    channels = (virtual_package_repodata(), "conda-forge", "msys2")
+
+    platform = "linux-64"
+    mamba_solver = mamba_factory(channels, platform)
+    rattler_solver = rattler_factory(channels, platform)
+    mamba_solvable, mamba_err, mamba_solution = mamba_solver.solve(
+        specs_linux, constraints=constraints_linux
+    )
+    rattler_solvable, rattler_err, rattler_solution = rattler_solver.solve(
+        specs_linux, constraints=constraints_linux
+    )
+    assert set(mamba_solution or []) == set(rattler_solution or [])
+    assert mamba_solvable == rattler_solvable
+
+    platform = "linux-64"
+    mamba_solver = mamba_factory(channels, platform)
+    rattler_solver = rattler_factory(channels, platform)
+    mamba_solvable, mamba_err, mamba_solution = mamba_solver.solve(
+        specs_linux_again, constraints=constraints_linux_again
+    )
+    rattler_solvable, rattler_err, rattler_solution = rattler_solver.solve(
+        specs_linux_again, constraints=constraints_linux_again
+    )
+    assert set(mamba_solution or []) == set(rattler_solution or [])
+    assert mamba_solvable == rattler_solvable
+
+    platform = "linux-64"
+    mamba_solver = mamba_factory(channels, platform)
+    rattler_solver = rattler_factory(channels, platform)
+    mamba_solvable, mamba_err, mamba_solution = mamba_solver.solve(
+        specs_linux, constraints=constraints_linux
+    )
+    rattler_solvable, rattler_err, rattler_solution = rattler_solver.solve(
+        specs_linux, constraints=constraints_linux
+    )
+    assert set(mamba_solution or []) == set(rattler_solution or [])
+    assert mamba_solvable == rattler_solvable
+
+    platform = "win-64"
+    mamba_solver = mamba_factory(channels, platform)
+    rattler_solver = rattler_factory(channels, platform)
+    mamba_solvable, mamba_err, mamba_solution = mamba_solver.solve(
+        specs_win, constraints=constraints_win
+    )
+    rattler_solvable, rattler_err, rattler_solution = rattler_solver.solve(
+        specs_win, constraints=constraints_win
+    )
+    assert set(mamba_solution or []) == set(rattler_solution or [])
+    assert mamba_solvable == rattler_solvable
+
+    if inspect.isfunction(mamba_factory):
+        assert (
+            _get_solver_cached.cache_info().misses == 3
+        ), _get_solver_cached.cache_info()
+
+    if hasattr(rattler_factory, "cache_info"):
+        assert rattler_factory.cache_info().misses == 2, rattler_factory.cache_info()

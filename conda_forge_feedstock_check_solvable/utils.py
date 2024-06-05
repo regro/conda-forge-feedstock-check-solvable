@@ -149,7 +149,7 @@ def override_env_var(name, value):
 
 @contextlib.contextmanager
 def suppress_output():
-    if "CONDA_FORGE_FEEDSTOCK_CHECK_SOLVABLE_DEBUG" in os.environ:
+    if "CONDA_FORGE_FEEDSTOCK_CHECK_SOLVABLE_DEBUG" in os.environ or VERBOSITY > 2:
         suppress = False
     else:
         suppress = True
