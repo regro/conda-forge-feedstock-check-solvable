@@ -3,9 +3,9 @@ import copy
 import datetime
 import os
 import pprint
+from functools import lru_cache
 from typing import List
 
-import cachetools.func
 from rattler import Channel, MatchSpec, Platform, RepoDataRecord, solve
 
 from conda_forge_feedstock_check_solvable.utils import (
@@ -177,6 +177,6 @@ class RattlerSolver:
         return run_exports
 
 
-@cachetools.func.ttl_cache(maxsize=8, ttl=600)
+@lru_cache(maxsize=128)
 def rattler_solver_factory(channels, platform):
     return RattlerSolver(list(channels), platform)

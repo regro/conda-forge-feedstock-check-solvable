@@ -13,9 +13,9 @@ https://gist.github.com/wolfv/cd12bd4a448c77ff02368e97ffdf495a.
 import copy
 import pprint
 import textwrap
+from functools import lru_cache
 from typing import List, Tuple
 
-import cachetools.func
 import libmambapy as api
 import rapidjson as json
 from conda.base.context import context
@@ -215,6 +215,6 @@ class MambaSolver:
         return run_exports
 
 
-@cachetools.func.ttl_cache(maxsize=8, ttl=600)
+@lru_cache(maxsize=128)
 def mamba_solver_factory(channels, platform):
     return MambaSolver(list(channels), platform)
