@@ -3,6 +3,7 @@ import copy
 import datetime
 import os
 import pprint
+import textwrap
 from functools import lru_cache
 from typing import List
 
@@ -130,11 +131,13 @@ class RattlerSolver:
         except Exception as e:
             err = str(e)
             print_warning(
-                "RATTLER failed to solve specs \n\n%s\n\nfor channels "
+                "MAMBA failed to solve specs \n\n%s\n\nwith "
+                "constraints \n\n%s\n\nfor channels "
                 "\n\n%s\n\nThe reported errors are:\n\n%s\n",
-                pprint.pformat(specs),
-                pprint.pformat(self.channels),
-                err,
+                textwrap.indent(pprint.pformat(specs), "    "),
+                textwrap.indent(pprint.pformat(constraints), "    "),
+                textwrap.indent(pprint.pformat(self.channels), "    "),
+                textwrap.indent(err, "    "),
             )
             success = False
             run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
