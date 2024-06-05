@@ -78,7 +78,7 @@ def is_recipe_solvable(
             build_platform=build_platform,
             verbosity=verbosity,
             solver=solver,
-            timeout_timer=TimeoutTimer(timeout if timeout is not None else 2e30),
+            timeout_timer=TimeoutTimer(timeout if timeout is not None else 6e5),
         )
     except TimeoutTimerException:
         print_warning("SOLVER TIMEOUT for %s", feedstock_dir)
@@ -100,7 +100,7 @@ def _is_recipe_solvable(
     timeout_timer=None,
 ) -> Tuple[bool, List[str], Dict[str, bool]]:
     conda_forge_feedstock_check_solvable.utils.VERBOSITY = verbosity
-    timeout_timer = timeout_timer or TimeoutTimer(2e30)
+    timeout_timer = timeout_timer or TimeoutTimer(6e5)
 
     build_platform = build_platform or {}
 
@@ -180,7 +180,7 @@ def _is_recipe_solvable_on_platform(
     solver_backend="mamba",
     timeout_timer=None,
 ):
-    timeout_timer = timeout_timer or TimeoutTimer(2e30)
+    timeout_timer = timeout_timer or TimeoutTimer(6e5)
 
     # parse the channel sources from the CBC
     parser = YAML(typ="jinja2")
