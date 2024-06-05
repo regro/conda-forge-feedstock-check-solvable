@@ -1,7 +1,6 @@
 python-rapidjson
 requests
 ruamel.yaml
-cachetools
 conda
 conda-package-handling
 conda-smithy
