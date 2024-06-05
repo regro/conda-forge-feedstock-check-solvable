@@ -12,6 +12,7 @@ https://gist.github.com/wolfv/cd12bd4a448c77ff02368e97ffdf495a.
 
 import copy
 import pprint
+import textwrap
 from typing import List, Tuple
 
 import cachetools.func
@@ -140,11 +141,13 @@ class MambaSolver:
         err = None
         if not success:
             print_warning(
-                "MAMBA failed to solve specs \n\n%s\n\nfor channels "
+                "MAMBA failed to solve specs \n\n%s\n\nwith "
+                "constraints \n\n%s\n\nfor channels "
                 "\n\n%s\n\nThe reported errors are:\n\n%s\n",
-                pprint.pformat(_specs),
-                pprint.pformat(self.channels),
-                solver.explain_problems(),
+                textwrap.indent(pprint.pformat(_specs), "    "),
+                textwrap.indent(pprint.pformat(_constraints), "    "),
+                textwrap.indent(pprint.pformat(self.channels), "    "),
+                textwrap.indent(solver.explain_problems(), "    "),
             )
             err = solver.explain_problems()
             solution = None

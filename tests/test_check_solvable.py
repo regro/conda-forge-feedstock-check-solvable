@@ -420,7 +420,6 @@ extra:
     )[0]
 
 
-@flaky
 def test_arrow_solvable_timeout(tmp_path, solver):
     feedstock_dir = clone_and_checkout_repo(
         tmp_path,
@@ -514,9 +513,3 @@ python_impl:
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
     assert any("python3.10" in k for k in solvable_by_variant)
-
-
-if __name__ == "__main__":
-    pth = os.path.join(os.path.dirname(__file__), "xgboost-feedstock")
-    assert is_recipe_solvable(pth, timeout=None, verbosity=2)[0]
-    assert is_recipe_solvable(pth, verbosity=2)[0]
