@@ -160,7 +160,7 @@ def _is_recipe_solvable(
                 ),
                 additional_channels=additional_channels,
                 solver_backend=solver,
-                timeout_time=timeout_timer,
+                timeout_timer=timeout_timer,
             )
             solvable = solvable and _solvable
             cbc_name = os.path.basename(cbc_fname).rsplit(".", maxsplit=1)[0]
