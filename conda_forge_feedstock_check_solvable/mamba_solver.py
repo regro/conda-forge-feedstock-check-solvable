@@ -248,3 +248,8 @@ class MambaSolver:
 
 def mamba_solver_factory(channels, platform):
     return MambaSolver(tuple(channels), platform, _use_cache=True)
+
+
+mamba_solver_factory.cache_info = _get_solver_cached.cache_info
+mamba_solver_factory.cache_clear = _get_solver_cached.cache_clear
+mamba_solver_factory.cache_parameters = _get_solver_cached.cache_parameters

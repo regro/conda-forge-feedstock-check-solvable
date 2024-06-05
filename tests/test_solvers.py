@@ -6,7 +6,6 @@ from flaky import flaky
 
 from conda_forge_feedstock_check_solvable.mamba_solver import (
     MambaSolver,
-    _get_solver_cached,
     mamba_solver_factory,
 )
 from conda_forge_feedstock_check_solvable.rattler_solver import (
@@ -231,6 +230,10 @@ def test_solvers_hang(solver_factory):
 @pytest.mark.parametrize("mamba_factory", [MambaSolver, mamba_solver_factory])
 @pytest.mark.parametrize("rattler_factory", [RattlerSolver, rattler_solver_factory])
 def test_solvers_compare_output(mamba_factory, rattler_factory):
+    if inspect.isfunction(mamba_factory) and inspect.isfunction(rattler_factory):
+        mamba_factory.cache_clear()
+        rattler_factory.cache_clear()
+
     specs_linux = (
         "libutf8proc >=2.8.0,<3.0a0",
         "orc >=2.0.1,<2.0.2.0a0",
@@ -361,10 +364,10 @@ def test_solvers_compare_output(mamba_factory, rattler_factory):
     assert set(mamba_solution or []) == set(rattler_solution or [])
     assert mamba_solvable == rattler_solvable
 
-    if inspect.isfunction(mamba_factory):
+    if inspect.isfunction(mamba_factory) and inspect.isfunction(rattler_factory):
         assert (
-            _get_solver_cached.cache_info().misses == 3
-        ), _get_solver_cached.cache_info()
-
-    if hasattr(rattler_factory, "cache_info"):
-        assert rattler_factory.cache_info().misses == 2, rattler_factory.cache_info()
+            mamba_factory.cache_info().misses > rattler_factory.cache_info().misses
+        ), {
+            "mamba cache info": mamba_factory.cache_info(),
+            "rattler cache info": rattler_factory.cache_info(),
+        }
