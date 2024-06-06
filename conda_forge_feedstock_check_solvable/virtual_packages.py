@@ -64,7 +64,7 @@ class FakeRepoData:
         out = {
             "info": {"subdir": subdir},
             "packages": packages,
-            "paxkages.conda": {},
+            "packages.conda": {},
             "removed": [],
             "repodata_version": 1,
         }
@@ -81,7 +81,7 @@ class FakeRepoData:
             packages[fname] = info_dict
 
         (self.base_path / subdir).mkdir(exist_ok=True)
-        (self.base_path / subdir / "repodata.json").write_text(json.dumps(out))
+        (self.base_path / subdir / "repodata.json").write_text(json.dumps(out, sort_keys=True))
 
     def write(self):
         all_subdirs = ALL_PLATFORMS.copy()
