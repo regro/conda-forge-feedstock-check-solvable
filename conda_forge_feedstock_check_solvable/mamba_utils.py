@@ -3,6 +3,7 @@
 # Copied from mamba 1.5.2
 
 import copy
+import os
 import urllib.parse
 from collections import OrderedDict
 from functools import lru_cache
@@ -124,25 +125,21 @@ def load_channels(
             priority = channel_prio
         else:
             priority = 0
+
         if has_priority:
-            subpriority = 0
+            # as done in conda-libmamba-solver
+            subpriority = 1
         else:
             subpriority = subprio_index
             subprio_index -= 1
 
-        if not subdir.loaded() and entry["platform"] != "noarch":
-            # ignore non-loaded subdir if channel is != noarch
-            continue
+        cache_path = str(subdir.cache_path())
+        if os.path.exists(cache_path.replace(".json", ".solv")):
+            cache_path = cache_path.replace(".json", ".solv")
 
-        if context.verbosity != 0 and not context.json:
-            print(
-                "Channel: {}, platform: {}, prio: {} : {}".format(
-                    entry["channel"], entry["platform"], priority, subpriority
-                )
-            )
-            print("Cache path: ", subdir.cache_path())
-
-        repo = subdir.create_repo(pool)
+        repo = api.Repo(
+            pool, entry["url"], cache_path, urllib.parse.quote(entry["url"])
+        )
         repo.set_priority(priority, subpriority)
         repos.append(repo)
 

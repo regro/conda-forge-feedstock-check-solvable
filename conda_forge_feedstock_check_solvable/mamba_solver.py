@@ -56,18 +56,20 @@ def _get_pool(channels, platform):
             platform=platform,
             has_priority=True,
         )
-        for repo in repos:
-            # need set_installed for add_pin, not sure why
-            repo.set_installed()
 
-    return pool
+    return pool, repos
 
 
 def _get_solver(channels, platform, constraints):
-    pool = _get_pool(channels, platform)
+    pool, repos = _get_pool(channels, platform)
 
     solver_options = [(api.SOLVER_FLAG_ALLOW_DOWNGRADE, 1)]
     solver = api.Solver(pool, solver_options)
+
+    if constraints:
+        for repo in repos:
+            # need set_installed for add_pin, not sure why
+            repo.set_installed()
 
     for constraint in constraints:
         solver.add_pin(constraint)
