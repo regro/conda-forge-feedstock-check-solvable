@@ -40,7 +40,8 @@ class RattlerSolver:
             if c == "defaults":
                 _channels.append("https://repo.anaconda.com/pkgs/main")
                 _channels.append("https://repo.anaconda.com/pkgs/r")
-                _channels.append("https://repo.anaconda.com/pkgs/msys2")
+                if platform_arch.startswith("win"):
+                    _channels.append("https://repo.anaconda.com/pkgs/msys2")
             else:
                 _channels.append(c)
         self._channels = [Channel(c) for c in _channels]

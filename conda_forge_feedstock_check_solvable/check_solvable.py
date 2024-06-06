@@ -207,9 +207,9 @@ def _is_recipe_solvable_on_platform(
             # channel_sources might be part of some zip_key
             channel_sources.extend([c.strip() for c in source.split(",")])
     else:
-        channel_sources = ["conda-forge", "defaults", "msys2"]
+        channel_sources = ["conda-forge", "defaults"]
 
-    if "msys2" not in channel_sources:
+    if "msys2" not in channel_sources and platform.startswith("win"):
         channel_sources.append("msys2")
 
     if additional_channels:
