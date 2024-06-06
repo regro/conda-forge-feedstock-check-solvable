@@ -2,43 +2,36 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copied from mamba 1.5.2
 
+import copy
 import urllib.parse
 from collections import OrderedDict
+from functools import lru_cache
 
 import libmambapy as api
 from conda.base.constants import ChannelPriority
 from conda.base.context import context
-from conda.core.index import check_allowlist
 from conda.gateways.connection.session import CondaHttpAuth
 
 
-def get_index(
-    channel_urls=(),
-    prepend=True,
+@lru_cache(maxsize=128)
+def get_cached_index(
+    channel_url,
     platform=None,
-    use_local=False,
-    use_cache=False,
-    unknown=None,
-    prefix=None,
     repodata_fn="repodata.json",
 ):
     if isinstance(platform, str):
         platform = [platform, "noarch"]
 
     all_channels = []
-    if use_local:
-        all_channels.append("local")
-    all_channels.extend(channel_urls)
-    if prepend:
-        all_channels.extend(context.channels)
-    check_allowlist(all_channels)
+    all_channels.append(channel_url)
 
     # Remove duplicates but retain order
     all_channels = list(OrderedDict.fromkeys(all_channels))
+    orig_all_channels = copy.deepcopy(all_channels)
 
     dlist = api.DownloadTargetList()
 
-    index = []
+    subdirs = []
 
     def fixup_channel_spec(spec):
         at_count = spec.count("@")
@@ -57,7 +50,9 @@ def get_index(
     pkgs_dirs = api.MultiPackageCache(context.pkgs_dirs)
     api.create_cache_dir(str(pkgs_dirs.first_writable_path))
 
-    for channel in api.get_channels(all_channels):
+    for orig_channel_name, channel in zip(
+        orig_all_channels, api.get_channels(all_channels)
+    ):
         for channel_platform, url in channel.platform_urls(with_credentials=True):
             full_url = CondaHttpAuth.add_binstar_token(url)
 
@@ -66,29 +61,29 @@ def get_index(
             )
 
             needs_finalising = sd.download_and_check_targets(dlist)
-            index.append(
+            if needs_finalising:
+                sd.finalize_checks()
+
+            subdirs.append(
                 (
                     sd,
                     {
                         "platform": channel_platform,
                         "url": url,
                         "channel": channel,
-                        "needs_finalising": needs_finalising,
+                        "needs_finalising": False,
+                        "input_channel": orig_channel_name,
                     },
                 )
             )
-
-    for sd, info in index:
-        if info["needs_finalising"]:
-            sd.finalize_checks()
-        dlist.add(sd)
+            dlist.add(sd)
 
     is_downloaded = dlist.download(api.MAMBA_DOWNLOAD_FAILFAST)
 
     if not is_downloaded:
         raise RuntimeError("Error downloading repodata.")
 
-    return index
+    return subdirs
 
 
 def load_channels(
@@ -96,20 +91,16 @@ def load_channels(
     channels,
     repos,
     has_priority=None,
-    prepend=True,
     platform=None,
-    use_local=False,
-    use_cache=True,
     repodata_fn="repodata.json",
 ):
-    index = get_index(
-        channel_urls=channels,
-        prepend=prepend,
-        platform=platform,
-        use_local=use_local,
-        repodata_fn=repodata_fn,
-        use_cache=use_cache,
-    )
+    index = []
+    for channel in channels:
+        index += get_cached_index(
+            channel_url=channel,
+            platform=platform,
+            repodata_fn=repodata_fn,
+        )
 
     if has_priority is None:
         has_priority = context.channel_priority in [

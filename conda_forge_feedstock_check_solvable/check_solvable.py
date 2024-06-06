@@ -33,7 +33,8 @@ def is_recipe_solvable(
     timeout=600,
     build_platform=None,
     verbosity=1,
-    solver="mamba",
+    solver="rattler",
+    fail_fast=False,
 ) -> Tuple[bool, List[str], Dict[str, bool]]:
     """Compute if a recipe is solvable.
 
@@ -60,6 +61,9 @@ def is_recipe_solvable(
         (gobbs of output).
     solver : str
         The solver to use. One of `mamba` or `rattler`.
+    fail_fast : bool
+        If True, then the function will return as soon as it finds a non-solvable
+        configuration.
 
     Returns
     -------
@@ -79,6 +83,7 @@ def is_recipe_solvable(
             verbosity=verbosity,
             solver=solver,
             timeout_timer=TimeoutTimer(timeout if timeout is not None else 6e5),
+            fail_fast=fail_fast,
         )
     except TimeoutTimerException:
         print_warning("SOLVER TIMEOUT for %s", feedstock_dir)
@@ -98,6 +103,7 @@ def _is_recipe_solvable(
     verbosity=1,
     solver="mamba",
     timeout_timer=None,
+    fail_fast=False,
 ) -> Tuple[bool, List[str], Dict[str, bool]]:
     conda_forge_feedstock_check_solvable.utils.VERBOSITY = verbosity
     timeout_timer = timeout_timer or TimeoutTimer(6e5)
@@ -161,11 +167,15 @@ def _is_recipe_solvable(
                 additional_channels=additional_channels,
                 solver_backend=solver,
                 timeout_timer=timeout_timer,
+                fail_fast=fail_fast,
             )
             solvable = solvable and _solvable
             cbc_name = os.path.basename(cbc_fname).rsplit(".", maxsplit=1)[0]
             errors.extend([f"{cbc_name}: {e}" for e in _errors])
             solvable_by_cbc[cbc_name] = _solvable
+
+            if not solvable and fail_fast:
+                break
 
     return solvable, errors, solvable_by_cbc
 
@@ -179,6 +189,7 @@ def _is_recipe_solvable_on_platform(
     additional_channels=(),
     solver_backend="mamba",
     timeout_timer=None,
+    fail_fast=False,
 ):
     timeout_timer = timeout_timer or TimeoutTimer(6e5)
 
@@ -265,22 +276,21 @@ def _is_recipe_solvable_on_platform(
     # now we loop through each one and check if we can solve it
     # we check run and host and ignore the rest
     print_debug("getting solver")
-    with suppress_output():
-        if solver_backend == "rattler":
-            solver_factory = rattler_solver_factory
-        elif solver_backend == "mamba":
-            solver_factory = mamba_solver_factory
-        else:
-            raise ValueError(f"Unknown solver backend {solver_backend}")
+    if solver_backend == "rattler":
+        solver_factory = rattler_solver_factory
+    elif solver_backend == "mamba":
+        solver_factory = mamba_solver_factory
+    else:
+        raise ValueError(f"Unknown solver backend {solver_backend}")
 
-        solver = solver_factory(tuple(channel_sources), f"{platform}-{arch}")
-        timeout_timer.raise_for_timeout()
+    solver = solver_factory(tuple(channel_sources), f"{platform}-{arch}")
+    timeout_timer.raise_for_timeout()
 
-        build_solver = solver_factory(
-            tuple(channel_sources),
-            f"{build_platform}-{build_arch}",
-        )
-        timeout_timer.raise_for_timeout()
+    build_solver = solver_factory(
+        tuple(channel_sources),
+        f"{build_platform}-{build_arch}",
+    )
+    timeout_timer.raise_for_timeout()
 
     solvable = True
     errors = []
@@ -314,6 +324,8 @@ def _is_recipe_solvable_on_platform(
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
+            if not solvable and fail_fast:
+                break
 
             run_constrained = list(set(run_constrained) | build_rx["strong_constrains"])
 
@@ -351,6 +363,8 @@ def _is_recipe_solvable_on_platform(
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
+            if not solvable and fail_fast:
+                break
 
             if m.is_cross:
                 if m.noarch or m.noarch_python:
@@ -382,6 +396,8 @@ def _is_recipe_solvable_on_platform(
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
+            if not solvable and fail_fast:
+                break
 
         tst_req = (
             m.get_value("test/requires", [])
@@ -402,6 +418,8 @@ def _is_recipe_solvable_on_platform(
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
+            if not solvable and fail_fast:
+                break
 
     print_info("RUN EXPORT CACHE STATUS: %s", get_run_exports.cache_info())
     print_info("SOLVER CACHE STATUS: %s", solver_factory.cache_info())

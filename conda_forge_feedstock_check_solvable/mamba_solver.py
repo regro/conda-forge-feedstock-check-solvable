@@ -13,7 +13,6 @@ https://gist.github.com/wolfv/cd12bd4a448c77ff02368e97ffdf495a.
 import copy
 import pprint
 import textwrap
-from functools import lru_cache
 from typing import List, Tuple
 
 import libmambapy as api
@@ -21,7 +20,10 @@ import rapidjson as json
 from conda.base.context import context
 from conda.models.match_spec import MatchSpec
 
-from conda_forge_feedstock_check_solvable.mamba_utils import load_channels
+from conda_forge_feedstock_check_solvable.mamba_utils import (
+    get_cached_index,
+    load_channels,
+)
 from conda_forge_feedstock_check_solvable.utils import (
     DEFAULT_RUN_EXPORTS,
     convert_spec_to_conda_build,
@@ -42,7 +44,7 @@ api.Context().add_pip_as_python_dependency = False
 api.Context().channel_priority = api.ChannelPriority.kStrict
 
 
-def _get_pool(channels, platform, constraints):
+def _get_pool(channels, platform):
     with suppress_output():
         pool = api.Pool()
 
@@ -62,7 +64,7 @@ def _get_pool(channels, platform, constraints):
 
 
 def _get_solver(channels, platform, constraints):
-    pool = _get_pool(channels, platform, constraints)
+    pool = _get_pool(channels, platform)
 
     solver_options = [(api.SOLVER_FLAG_ALLOW_DOWNGRADE, 1)]
     solver = api.Solver(pool, solver_options)
@@ -71,11 +73,6 @@ def _get_solver(channels, platform, constraints):
         solver.add_pin(constraint)
 
     return solver, pool
-
-
-@lru_cache(maxsize=128)
-def _get_solver_cached(channels, platform, constraints):
-    return _get_solver(channels, platform, constraints)
 
 
 class MambaSolver:
@@ -94,10 +91,9 @@ class MambaSolver:
     >>> solver.solve(["xtensor 0.18"])
     """
 
-    def __init__(self, channels, platform, _use_cache=False):
+    def __init__(self, channels, platform):
         self.channels = channels
         self.platform = platform
-        self._use_cache = _use_cache
 
     def solve(
         self,
@@ -149,14 +145,7 @@ class MambaSolver:
         _specs = [convert_spec_to_conda_build(s) for s in specs]
         _constraints = [convert_spec_to_conda_build(s) for s in constraints or []]
 
-        if self._use_cache:
-            solver, pool = _get_solver_cached(
-                self.channels, self.platform, tuple(_constraints)
-            )
-        else:
-            solver, pool = _get_solver(
-                self.channels, self.platform, tuple(_constraints)
-            )
+        solver, pool = _get_solver(self.channels, self.platform, tuple(_constraints))
 
         print_debug(
             "MAMBA running solver for specs \n\n%s\nconstraints: %s\n",
@@ -247,9 +236,9 @@ class MambaSolver:
 
 
 def mamba_solver_factory(channels, platform):
-    return MambaSolver(tuple(channels), platform, _use_cache=True)
+    return MambaSolver(tuple(channels), platform)
 
 
-mamba_solver_factory.cache_info = _get_solver_cached.cache_info
-mamba_solver_factory.cache_clear = _get_solver_cached.cache_clear
-mamba_solver_factory.cache_parameters = _get_solver_cached.cache_parameters
+mamba_solver_factory.cache_info = get_cached_index.cache_info
+mamba_solver_factory.cache_clear = get_cached_index.cache_clear
+mamba_solver_factory.cache_parameters = get_cached_index.cache_parameters

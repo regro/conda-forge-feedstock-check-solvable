@@ -371,3 +371,21 @@ def test_solvers_compare_output(mamba_factory, rattler_factory):
             "mamba cache info": mamba_factory.cache_info(),
             "rattler cache info": rattler_factory.cache_info(),
         }
+
+
+@pytest.mark.parametrize("mamba_factory", [MambaSolver, mamba_solver_factory])
+@pytest.mark.parametrize("rattler_factory", [RattlerSolver, rattler_solver_factory])
+def test_solvers_python(mamba_factory, rattler_factory):
+    channels = (virtual_package_repodata(), "conda-forge", "defaults", "msys2")
+    platform = "linux-64"
+    for _ in range(4):
+        mamba_solver = mamba_factory(channels, platform)
+        rattler_solver = rattler_factory(channels, platform)
+        mamba_solvable, mamba_err, mamba_solution = mamba_solver.solve(
+            ["python"],
+        )
+        rattler_solvable, rattler_err, rattler_solution = rattler_solver.solve(
+            ["python"],
+        )
+        assert set(mamba_solution or []) == set(rattler_solution or [])
+        assert mamba_solvable == rattler_solvable
