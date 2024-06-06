@@ -131,7 +131,7 @@ class RattlerSolver:
         except Exception as e:
             err = str(e)
             print_warning(
-                "MAMBA failed to solve specs \n\n%s\n\nwith "
+                "RATTLER failed to solve specs \n\n%s\n\nwith "
                 "constraints \n\n%s\n\nfor channels "
                 "\n\n%s\n\non platform "
                 "\n\n%s\n\nThe reported errors are:\n\n%s\n",
