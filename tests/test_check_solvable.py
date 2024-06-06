@@ -62,7 +62,11 @@ extra:
 """,
         )
     assert is_recipe_solvable(
-        feedstock_dir, solver=solver, verbosity=VERB, timeout=None
+        feedstock_dir,
+        solver=solver,
+        verbosity=VERB,
+        timeout=None,
+        fail_fast=True,
     )[0]
 
 
@@ -140,6 +144,7 @@ def test_r_base_cross_solvable(solver):
         solver=solver,
         verbosity=VERB,
         timeout=None,
+        fail_fast=True,
     )
     assert solvable, pprint.pformat(errors)
 
@@ -152,6 +157,7 @@ def test_xgboost_solvable(solver):
         solver=solver,
         verbosity=VERB,
         timeout=None,
+        fail_fast=True,
     )
     assert solvable, pprint.pformat(errors)
 
@@ -164,6 +170,7 @@ def test_pandas_solvable(solver):
         solver=solver,
         verbosity=VERB,
         timeout=None,
+        fail_fast=True,
     )
     assert solvable, pprint.pformat(errors)
 
@@ -188,6 +195,7 @@ def test_arrow_solvable(tmp_path, solver):
         solver=solver,
         verbosity=VERB,
         timeout=None,
+        fail_fast=True,
     )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
@@ -206,6 +214,7 @@ def test_guiqwt_solvable(tmp_path, solver):
         solver=solver,
         verbosity=VERB,
         timeout=None,
+        fail_fast=True,
     )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
@@ -224,6 +233,7 @@ def test_datalad_solvable(tmp_path, solver):
         solver=solver,
         verbosity=VERB,
         timeout=None,
+        fail_fast=True,
     )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
@@ -242,6 +252,7 @@ def test_grpcio_solvable(tmp_path, solver):
         solver=solver,
         verbosity=VERB,
         timeout=None,
+        fail_fast=True,
     )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
@@ -265,6 +276,7 @@ def test_cupy_solvable(tmp_path, solver):
         solver=solver,
         verbosity=VERB,
         timeout=None,
+        fail_fast=True,
     )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
@@ -321,6 +333,7 @@ def test_run_exports_constrains_conflict(feedstock_dir, tmp_path_factory, solver
         solver=solver,
         verbosity=VERB,
         timeout=None,
+        fail_fast=True,
     )
     assert solvable, pprint.pformat(errors)
 
@@ -434,6 +447,7 @@ def test_arrow_solvable_timeout(tmp_path, solver):
             timeout=0.1,
             solver=solver,
             verbosity=VERB,
+            fail_fast=True,
         )
         assert solvable
         assert errors == []
@@ -509,6 +523,7 @@ python_impl:
         solver=solver,
         verbosity=VERB,
         timeout=None,
+        fail_fast=True,
     )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
