@@ -5,6 +5,7 @@ import io
 import os
 import subprocess
 import tempfile
+import time
 import traceback
 from collections.abc import Mapping
 
@@ -148,7 +149,7 @@ def override_env_var(name, value):
 
 @contextlib.contextmanager
 def suppress_output():
-    if "CONDA_FORGE_FEEDSTOCK_CHECK_SOLVABLE_DEBUG" in os.environ:
+    if "CONDA_FORGE_FEEDSTOCK_CHECK_SOLVABLE_DEBUG" in os.environ or VERBOSITY > 2:
         suppress = False
     else:
         suppress = True
@@ -175,6 +176,29 @@ def suppress_output():
         raise e
     finally:
         pass
+
+
+class TimeoutTimerException(Exception):
+    pass
+
+
+class TimeoutTimer:
+    def __init__(self, timeout, name=None):
+        self.timeout = timeout
+        self.name = name
+        self._start = time.monotonic()
+
+    @property
+    def elapsed(self):
+        return time.monotonic() - self._start
+
+    @property
+    def remaining(self):
+        return self.timeout - self.elapsed
+
+    def raise_for_timeout(self):
+        if self.elapsed > self.timeout:
+            raise TimeoutTimerException("timeout out for %s" % self.name)
 
 
 def _munge_req_star(req):

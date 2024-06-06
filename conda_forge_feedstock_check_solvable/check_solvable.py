@@ -6,9 +6,13 @@ import conda_build.api
 import psutil
 from ruamel.yaml import YAML
 
+import conda_forge_feedstock_check_solvable.utils
 from conda_forge_feedstock_check_solvable.mamba_solver import mamba_solver_factory
+from conda_forge_feedstock_check_solvable.rattler_solver import rattler_solver_factory
 from conda_forge_feedstock_check_solvable.utils import (
     MAX_GLIBC_MINOR,
+    TimeoutTimer,
+    TimeoutTimerException,
     apply_pins,
     get_run_exports,
     override_env_var,
@@ -23,27 +27,14 @@ from conda_forge_feedstock_check_solvable.virtual_packages import (
 )
 
 
-def _func(feedstock_dir, additional_channels, build_platform, verbosity, conn):
-    try:
-        res = _is_recipe_solvable(
-            feedstock_dir,
-            additional_channels=additional_channels,
-            build_platform=build_platform,
-            verbosity=verbosity,
-        )
-        conn.send(res)
-    except Exception as e:
-        conn.send(e)
-    finally:
-        conn.close()
-
-
 def is_recipe_solvable(
     feedstock_dir,
     additional_channels=None,
     timeout=600,
     build_platform=None,
     verbosity=1,
+    solver="rattler",
+    fail_fast=False,
 ) -> Tuple[bool, List[str], Dict[str, bool]]:
     """Compute if a recipe is solvable.
 
@@ -59,12 +50,20 @@ def is_recipe_solvable(
     additional_channels : list of str, optional
         If given, these channels will be used in addition to the main ones.
     timeout : int, optional
-        If not None, then the work will be run in a separate process and
-        this function will return True if the work doesn't complete before `timeout`
-        seconds.
+        If not None, then this function will return True if the solver checks don't
+        complete before `timeout` seconds.
+    build_platform : dict, optional
+        A dictionary mapping the target platform-arch to the platform-arch to use for
+        the build. If not given, the build platform-arch will be the same as
+        the target platform-arch.
     verbosity : int
         An int indicating the level of verbosity from 0 (no output) to 3
         (gobbs of output).
+    solver : str
+        The solver to use. One of `mamba` or `rattler`.
+    fail_fast : bool
+        If True, then the function will return as soon as it finds a non-solvable
+        configuration.
 
     Returns
     -------
@@ -72,56 +71,26 @@ def is_recipe_solvable(
         The logical AND of the solvability of the recipe on all platforms
         in the CI scripts.
     errors : list of str
-        A list of errors from mamba. Empty if recipe is solvable.
+        A list of errors from the solver. Empty if recipe is solvable.
     solvable_by_variant : dict
         A lookup by variant config that shows if a particular config is solvable
     """
-    if timeout:
-        from multiprocessing import Pipe, Process
-
-        parent_conn, child_conn = Pipe()
-        p = Process(
-            target=_func,
-            args=(
-                feedstock_dir,
-                additional_channels,
-                build_platform,
-                verbosity,
-                child_conn,
-            ),
-        )
-        p.start()
-        if parent_conn.poll(timeout):
-            res = parent_conn.recv()
-            if isinstance(res, Exception):
-                res = (
-                    False,
-                    [repr(res)],
-                    {},
-                )
-        else:
-            print_warning("SOLVER TIMEOUT for %s", feedstock_dir)
-            res = (
-                True,
-                [],
-                {},
-            )
-
-        parent_conn.close()
-
-        p.join(0)
-        p.terminate()
-        p.kill()
-        try:
-            p.close()
-        except ValueError:
-            pass
-    else:
+    try:
         res = _is_recipe_solvable(
             feedstock_dir,
             additional_channels=additional_channels,
             build_platform=build_platform,
             verbosity=verbosity,
+            solver=solver,
+            timeout_timer=TimeoutTimer(timeout if timeout is not None else 6e5),
+            fail_fast=fail_fast,
+        )
+    except TimeoutTimerException:
+        print_warning("SOLVER TIMEOUT for %s", feedstock_dir)
+        res = (
+            True,
+            [],
+            {},
         )
 
     return res
@@ -132,14 +101,19 @@ def _is_recipe_solvable(
     additional_channels=(),
     build_platform=None,
     verbosity=1,
+    solver="mamba",
+    timeout_timer=None,
+    fail_fast=False,
 ) -> Tuple[bool, List[str], Dict[str, bool]]:
-    global VERBOSITY
-    VERBOSITY = verbosity
+    conda_forge_feedstock_check_solvable.utils.VERBOSITY = verbosity
+    timeout_timer = timeout_timer or TimeoutTimer(6e5)
 
     build_platform = build_platform or {}
 
     additional_channels = additional_channels or []
     additional_channels += [virtual_package_repodata()]
+
+    timeout_timer.raise_for_timeout()
 
     with override_env_var("CONDA_OVERRIDE_GLIBC", "2.%d" % MAX_GLIBC_MINOR):
         errors = []
@@ -165,6 +139,8 @@ def _is_recipe_solvable(
         solvable = True
         solvable_by_cbc = {}
         for cbc_fname in cbcs:
+            timeout_timer.raise_for_timeout()
+
             # we need to extract the platform (e.g., osx, linux) and arch (e.g., 64, aarm64)
             # conda smithy forms a string that is
             #
@@ -179,6 +155,7 @@ def _is_recipe_solvable(
                 arch = "64"
 
             print_info("CHECKING RECIPE SOLVABLE: %s", os.path.basename(cbc_fname))
+
             _solvable, _errors = _is_recipe_solvable_on_platform(
                 os.path.join(feedstock_dir, "recipe"),
                 cbc_fname,
@@ -188,11 +165,17 @@ def _is_recipe_solvable(
                     build_platform.get(f"{platform}_{arch}", f"{platform}_{arch}")
                 ),
                 additional_channels=additional_channels,
+                solver_backend=solver,
+                timeout_timer=timeout_timer,
+                fail_fast=fail_fast,
             )
             solvable = solvable and _solvable
             cbc_name = os.path.basename(cbc_fname).rsplit(".", maxsplit=1)[0]
             errors.extend([f"{cbc_name}: {e}" for e in _errors])
             solvable_by_cbc[cbc_name] = _solvable
+
+            if not solvable and fail_fast:
+                break
 
     return solvable, errors, solvable_by_cbc
 
@@ -204,7 +187,12 @@ def _is_recipe_solvable_on_platform(
     arch,
     build_platform_arch=None,
     additional_channels=(),
+    solver_backend="mamba",
+    timeout_timer=None,
+    fail_fast=False,
 ):
+    timeout_timer = timeout_timer or TimeoutTimer(6e5)
+
     # parse the channel sources from the CBC
     parser = YAML(typ="jinja2")
     parser.indent(mapping=2, sequence=4, offset=2)
@@ -219,9 +207,9 @@ def _is_recipe_solvable_on_platform(
             # channel_sources might be part of some zip_key
             channel_sources.extend([c.strip() for c in source.split(",")])
     else:
-        channel_sources = ["conda-forge", "defaults", "msys2"]
+        channel_sources = ["conda-forge", "defaults"]
 
-    if "msys2" not in channel_sources:
+    if "msys2" not in channel_sources and platform.startswith("win"):
         channel_sources.append("msys2")
 
     if additional_channels:
@@ -234,12 +222,15 @@ def _is_recipe_solvable_on_platform(
         arch,
     )
 
+    timeout_timer.raise_for_timeout()
+
     # here we extract the conda build config in roughly the same way that
     # it would be used in a real build
     print_debug("rendering recipe with conda build")
 
     with suppress_output():
         for att in range(2):
+            timeout_timer.raise_for_timeout()
             try:
                 if att == 1:
                     os.system("rm -f %s/conda_build_config.yaml" % recipe_dir)
@@ -259,6 +250,8 @@ def _is_recipe_solvable_on_platform(
                 else:
                     raise e
 
+        timeout_timer.raise_for_timeout()
+
         # now we render the meta.yaml into an actual recipe
         metas = conda_build.api.render(
             recipe_dir,
@@ -272,6 +265,8 @@ def _is_recipe_solvable_on_platform(
             channel_urls=channel_sources,
         )
 
+    timeout_timer.raise_for_timeout()
+
     # get build info
     if build_platform_arch is not None:
         build_platform, build_arch = build_platform_arch.split("_")
@@ -280,17 +275,29 @@ def _is_recipe_solvable_on_platform(
 
     # now we loop through each one and check if we can solve it
     # we check run and host and ignore the rest
-    print_debug("getting mamba solver")
-    with suppress_output():
-        solver = mamba_solver_factory(tuple(channel_sources), f"{platform}-{arch}")
-        build_solver = mamba_solver_factory(
-            tuple(channel_sources),
-            f"{build_platform}-{build_arch}",
-        )
+    print_debug("getting solver")
+    if solver_backend == "rattler":
+        solver_factory = rattler_solver_factory
+    elif solver_backend == "mamba":
+        solver_factory = mamba_solver_factory
+    else:
+        raise ValueError(f"Unknown solver backend {solver_backend}")
+
+    solver = solver_factory(tuple(channel_sources), f"{platform}-{arch}")
+    timeout_timer.raise_for_timeout()
+
+    build_solver = solver_factory(
+        tuple(channel_sources),
+        f"{build_platform}-{build_arch}",
+    )
+    timeout_timer.raise_for_timeout()
+
     solvable = True
     errors = []
     outnames = [m.name() for m, _, _ in metas]
     for m, _, _ in metas:
+        timeout_timer.raise_for_timeout()
+
         print_debug("checking recipe %s", m.name())
 
         build_req = m.get_value("requirements/build", [])
@@ -308,10 +315,17 @@ def _is_recipe_solvable_on_platform(
                 get_run_exports=True,
                 ignore_run_exports_from=ign_runex_from,
                 ignore_run_exports=ign_runex,
+                timeout=timeout_timer.remaining
+                if solver_backend == "rattler"
+                else None,
             )
+            timeout_timer.raise_for_timeout()
+
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
+            if not solvable and fail_fast:
+                break
 
             run_constrained = list(set(run_constrained) | build_rx["strong_constrains"])
 
@@ -340,10 +354,17 @@ def _is_recipe_solvable_on_platform(
                 get_run_exports=True,
                 ignore_run_exports_from=ign_runex_from,
                 ignore_run_exports=ign_runex,
+                timeout=timeout_timer.remaining
+                if solver_backend == "rattler"
+                else None,
             )
+            timeout_timer.raise_for_timeout()
+
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
+            if not solvable and fail_fast:
+                break
 
             if m.is_cross:
                 if m.noarch or m.noarch_python:
@@ -363,10 +384,20 @@ def _is_recipe_solvable_on_platform(
         if run_req:
             run_req = apply_pins(run_req, host_req or [], build_req or [], outnames, m)
             run_req = remove_reqs_by_name(run_req, outnames)
-            _solvable, _err, _ = solver.solve(run_req, constraints=run_constrained)
+            _solvable, _err, _ = solver.solve(
+                run_req,
+                constraints=run_constrained,
+                timeout=timeout_timer.remaining
+                if solver_backend == "rattler"
+                else None,
+            )
+            timeout_timer.raise_for_timeout()
+
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
+            if not solvable and fail_fast:
+                break
 
         tst_req = (
             m.get_value("test/requires", [])
@@ -375,12 +406,23 @@ def _is_recipe_solvable_on_platform(
         )
         if tst_req:
             tst_req = remove_reqs_by_name(tst_req, outnames)
-            _solvable, _err, _ = solver.solve(tst_req, constraints=run_constrained)
+            _solvable, _err, _ = solver.solve(
+                tst_req,
+                constraints=run_constrained,
+                timeout=timeout_timer.remaining
+                if solver_backend == "rattler"
+                else None,
+            )
+            timeout_timer.raise_for_timeout()
+
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
+            if not solvable and fail_fast:
+                break
 
     print_info("RUN EXPORT CACHE STATUS: %s", get_run_exports.cache_info())
+    print_info("SOLVER CACHE STATUS: %s", solver_factory.cache_info())
     print_info(
         "SOLVER MEM USAGE: %d MB",
         psutil.Process().memory_info().rss // 1024**2,

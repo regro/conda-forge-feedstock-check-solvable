@@ -1,4 +1,4 @@
-name: tests
+name: tests-mamba
 
 on:
   push:
@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  tests:
-    name: tests
+  tests-mamba:
+    name: tests-mamba
     runs-on: "ubuntu-latest"
     steps:
       - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v3
@@ -63,7 +63,7 @@ jobs:
 
           python -m pip install -v --no-deps --no-build-isolation -e .
 
-      - name: test w/ rattler
+      - name: test w/ mamba
         shell: bash -l {0}
         run: |
-          pytest -vv --durations=0 --solver=rattler tests
+          pytest -vv --durations=0 --solver=mamba tests

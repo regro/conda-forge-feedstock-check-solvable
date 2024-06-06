@@ -10,24 +10,31 @@ Most of the code here is due to @wolfv in this gist,
 https://gist.github.com/wolfv/cd12bd4a448c77ff02368e97ffdf495a.
 """
 
+import atexit
 import copy
+import os
 import pprint
+import shutil
+import tempfile
 import textwrap
 from typing import List, Tuple
 
-import cachetools.func
 import libmambapy as api
 import rapidjson as json
 from conda.base.context import context
 from conda.models.match_spec import MatchSpec
 
-from conda_forge_feedstock_check_solvable.mamba_utils import load_channels
+from conda_forge_feedstock_check_solvable.mamba_utils import (
+    get_cached_index,
+    load_channels,
+)
 from conda_forge_feedstock_check_solvable.utils import (
     DEFAULT_RUN_EXPORTS,
     convert_spec_to_conda_build,
     get_run_exports,
     print_debug,
     print_warning,
+    suppress_output,
 )
 
 pkgs_dirs = context.pkgs_dirs
@@ -39,6 +46,59 @@ api.Context().add_pip_as_python_dependency = False
 
 # set strict channel priority
 api.Context().channel_priority = api.ChannelPriority.kStrict
+
+
+def _make_installed_repo():
+    # tmp directory in github actions
+    runner_tmp = os.environ.get("RUNNER_TEMP")
+    tmp_dir = tempfile.mkdtemp(dir=runner_tmp)
+
+    if not runner_tmp:
+        # no need to bother cleaning up on CI
+        def clean():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+        atexit.register(clean)
+
+    pth = os.path.join(tmp_dir, "installed", "repodata.json")
+    os.makedirs(os.path.dirname(pth), exist_ok=True)
+    with open(pth, "w") as f:
+        f.write("{}")
+
+    return pth
+
+
+def _get_pool(channels, platform):
+    with suppress_output():
+        pool = api.Pool()
+
+        repos = []
+        load_channels(
+            pool,
+            channels,
+            repos,
+            platform=platform,
+            has_priority=True,
+        )
+
+    return pool, repos
+
+
+def _get_solver(channels, platform, constraints):
+    pool, repos = _get_pool(channels, platform)
+
+    solver_options = [(api.SOLVER_FLAG_ALLOW_DOWNGRADE, 1)]
+    solver = api.Solver(pool, solver_options)
+
+    if constraints:
+        # add_pin needs an "installed" Repo to store the pin info
+        repo = api.Repo(pool, "installed", _make_installed_repo(), "")
+        repo.set_installed()
+
+        for constraint in constraints:
+            solver.add_pin(constraint)
+
+    return solver, pool
 
 
 class MambaSolver:
@@ -60,19 +120,6 @@ class MambaSolver:
     def __init__(self, channels, platform):
         self.channels = channels
         self.platform = platform
-        self.pool = api.Pool()
-
-        self.repos = []
-        self.index = load_channels(
-            self.pool,
-            self.channels,
-            self.repos,
-            platform=platform,
-            has_priority=True,
-        )
-        for repo in self.repos:
-            # need set_installed for add_pin, not sure why
-            repo.set_installed()
 
     def solve(
         self,
@@ -81,6 +128,7 @@ class MambaSolver:
         ignore_run_exports_from=None,
         ignore_run_exports=None,
         constraints=None,
+        timeout=None,
     ) -> Tuple[bool, List[str]]:
         """Solve given a set of specs.
 
@@ -99,6 +147,8 @@ class MambaSolver:
         constraints : list, optional
             A list of package specs to apply as constraints to the solve.
             These packages are not included in the solution.
+        timeout : int, optional
+            Ignored by mamba.
 
         Returns
         -------
@@ -112,22 +162,22 @@ class MambaSolver:
             A dictionary with the weak and strong run exports for the packages.
             Only returned if get_run_exports is True.
         """
+        if timeout is not None:
+            raise RuntimeError("The `timeout` keyword is not supported by mamba!")
+
         ignore_run_exports_from = ignore_run_exports_from or []
         ignore_run_exports = ignore_run_exports or []
 
-        solver_options = [(api.SOLVER_FLAG_ALLOW_DOWNGRADE, 1)]
-        solver = api.Solver(self.pool, solver_options)
-
         _specs = [convert_spec_to_conda_build(s) for s in specs]
         _constraints = [convert_spec_to_conda_build(s) for s in constraints or []]
+
+        solver, pool = _get_solver(self.channels, self.platform, tuple(_constraints))
 
         print_debug(
             "MAMBA running solver for specs \n\n%s\nconstraints: %s\n",
             pprint.pformat(_specs),
             pprint.pformat(_constraints),
         )
-        for constraint in _constraints:
-            solver.add_pin(constraint)
 
         solver.add_jobs(_specs, api.SOLVER_INSTALL)
         success = solver.solve()
@@ -137,10 +187,12 @@ class MambaSolver:
             print_warning(
                 "MAMBA failed to solve specs \n\n%s\n\nwith "
                 "constraints \n\n%s\n\nfor channels "
+                "\n\n%s\n\non platform "
                 "\n\n%s\n\nThe reported errors are:\n\n%s\n",
                 textwrap.indent(pprint.pformat(_specs), "    "),
                 textwrap.indent(pprint.pformat(_constraints), "    "),
                 textwrap.indent(pprint.pformat(self.channels), "    "),
+                textwrap.indent(pprint.pformat(self.platform), "    "),
                 textwrap.indent(solver.explain_problems(), "    "),
             )
             err = solver.explain_problems()
@@ -148,7 +200,7 @@ class MambaSolver:
             run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
         else:
             t = api.Transaction(
-                self.pool,
+                pool,
                 solver,
                 PACKAGE_CACHE,
             )
@@ -209,6 +261,10 @@ class MambaSolver:
         return run_exports
 
 
-@cachetools.func.ttl_cache(maxsize=8, ttl=60)
 def mamba_solver_factory(channels, platform):
-    return MambaSolver(list(channels), platform)
+    return MambaSolver(tuple(channels), platform)
+
+
+mamba_solver_factory.cache_info = get_cached_index.cache_info
+mamba_solver_factory.cache_clear = get_cached_index.cache_clear
+mamba_solver_factory.cache_parameters = get_cached_index.cache_parameters
