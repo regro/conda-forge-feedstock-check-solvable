@@ -10,8 +10,12 @@ Most of the code here is due to @wolfv in this gist,
 https://gist.github.com/wolfv/cd12bd4a448c77ff02368e97ffdf495a.
 """
 
+import atexit
 import copy
+import os
 import pprint
+import shutil
+import tempfile
 import textwrap
 from typing import List, Tuple
 
@@ -44,6 +48,26 @@ api.Context().add_pip_as_python_dependency = False
 api.Context().channel_priority = api.ChannelPriority.kStrict
 
 
+def _make_installed_repo():
+    # tmp directory in github actions
+    runner_tmp = os.environ.get("RUNNER_TEMP")
+    tmp_dir = tempfile.mkdtemp(dir=runner_tmp)
+
+    if not runner_tmp:
+        # no need to bother cleaning up on CI
+        def clean():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+        atexit.register(clean)
+
+    pth = os.path.join(tmp_dir, "installed", "repodata.json")
+    os.makedirs(os.path.dirname(pth), exist_ok=True)
+    with open(pth, "w") as f:
+        f.write("{}")
+
+    return pth
+
+
 def _get_pool(channels, platform):
     with suppress_output():
         pool = api.Pool()
@@ -67,12 +91,12 @@ def _get_solver(channels, platform, constraints):
     solver = api.Solver(pool, solver_options)
 
     if constraints:
-        for repo in repos:
-            # need set_installed for add_pin, not sure why
-            repo.set_installed()
+        # add_pin needs an "installed" Repo to store the pin info
+        repo = api.Repo(pool, "installed", _make_installed_repo(), "")
+        repo.set_installed()
 
-    for constraint in constraints:
-        solver.add_pin(constraint)
+        for constraint in constraints:
+            solver.add_pin(constraint)
 
     return solver, pool
 
