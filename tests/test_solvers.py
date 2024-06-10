@@ -389,3 +389,36 @@ def test_solvers_python(mamba_factory, rattler_factory):
         )
         assert set(mamba_solution or []) == set(rattler_solution or [])
         assert mamba_solvable == rattler_solvable
+
+
+def test_solvers_python3_pin(solver_factory):
+    specs = [
+        "tetgen",
+        "hdf5",
+        "libgfortran5 >=12.3.0",
+        "triangle",
+        "scipy",
+        "numpy",
+        "pytest-xdist",
+        "ncurses",
+        "pychrono >=7",
+        "cython",
+        "h5py * mpi_mpich_*",
+        "petsc4py",
+        "future",
+        "mpi4py",
+        "pytest",
+        "libgcc-ng >=12",
+        "h5py",
+        "openblas",
+        "python 3",
+        "hdf5 * mpi_mpich_*",
+        "libgfortran-ng",
+        "matplotlib-base",
+        "libstdcxx-ng >=12",
+    ]
+    channels = (virtual_package_repodata(), "conda-forge")
+    platform = "linux-64"
+    solver = solver_factory(channels, platform)
+    solvable, err, solution = solver.solve(specs)
+    assert solvable, (err, solution)

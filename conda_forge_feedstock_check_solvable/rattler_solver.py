@@ -11,6 +11,7 @@ from rattler import Channel, MatchSpec, Platform, RepoDataRecord, solve
 
 from conda_forge_feedstock_check_solvable.utils import (
     DEFAULT_RUN_EXPORTS,
+    convert_spec_to_conda_build,
     get_run_exports,
     print_debug,
     print_warning,
@@ -96,8 +97,12 @@ class RattlerSolver:
         run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)
 
         try:
-            _specs = [MatchSpec(s) for s in specs]
-            _constraints = [MatchSpec(c) for c in constraints] if constraints else None
+            _specs = [MatchSpec(convert_spec_to_conda_build(s)) for s in specs]
+            _constraints = (
+                [MatchSpec(convert_spec_to_conda_build(c)) for c in constraints]
+                if constraints
+                else None
+            )
 
             print_debug(
                 "RATTLER running solver for specs \n\n%s\n", pprint.pformat(_specs)
@@ -130,14 +135,16 @@ class RattlerSolver:
                 )
 
         except Exception as e:
+            __specs = [convert_spec_to_conda_build(s) for s in specs]
+            __constraints = [convert_spec_to_conda_build(s) for s in constraints or []]
             err = str(e)
             print_warning(
                 "RATTLER failed to solve specs \n\n%s\n\nwith "
                 "constraints \n\n%s\n\nfor channels "
                 "\n\n%s\n\non platform "
                 "\n\n%s\n\nThe reported errors are:\n\n%s\n",
-                textwrap.indent(pprint.pformat(specs), "    "),
-                textwrap.indent(pprint.pformat(constraints), "    "),
+                textwrap.indent(pprint.pformat(__specs), "    "),
+                textwrap.indent(pprint.pformat(__constraints), "    "),
                 textwrap.indent(pprint.pformat(self.channels), "    "),
                 textwrap.indent(pprint.pformat(self.platform_arch), "    "),
                 textwrap.indent(err, "    "),
