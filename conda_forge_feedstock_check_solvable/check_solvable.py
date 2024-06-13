@@ -382,6 +382,12 @@ def _is_recipe_solvable_on_platform(
                     | host_rx["strong_constrains"]
                 )
 
+        pin_compat_req = (
+            (host_req or [])
+            if m.is_cross and not m.build_is_host
+            else (build_req or [])
+        )
+
         run_constrained = apply_pins(
             run_constrained, host_req or [], build_req or [], outnames, m
         )
@@ -389,9 +395,7 @@ def _is_recipe_solvable_on_platform(
             print_debug("run reqs before pins:\n\n%s\n" % pprint.pformat(run_req))
             run_req = apply_pins(run_req, host_req or [], build_req or [], outnames, m)
             run_req = remove_reqs_by_name(run_req, outnames)
-            run_req = replace_pin_comaptible(
-                run_req, host_req if m.is_cross and not m.build_is_host else build_req
-            )
+            run_req = replace_pin_comaptible(run_req, pin_compat_req)
             print_debug("run reqs after pins:\n\n%s\n" % pprint.pformat(run_req))
 
             _solvable, _err, _ = solver.solve(
@@ -417,9 +421,7 @@ def _is_recipe_solvable_on_platform(
         if tst_req:
             print_debug("test reqs before pins:\n\n%s\n" % pprint.pformat(tst_req))
             tst_req = remove_reqs_by_name(tst_req, outnames)
-            tst_req = replace_pin_comaptible(
-                tst_req, host_req if m.is_cross and not m.build_is_host else build_req
-            )
+            tst_req = replace_pin_comaptible(tst_req, pin_compat_req)
             print_debug("test reqs after pins:\n\n%s\n" % pprint.pformat(tst_req))
             _solvable, _err, _ = solver.solve(
                 tst_req,
