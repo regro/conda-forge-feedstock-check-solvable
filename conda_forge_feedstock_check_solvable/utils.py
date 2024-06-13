@@ -576,7 +576,7 @@ def _apply_pin_compatible(
     from conda_build.utils import apply_pin_expressions
 
     if exact:
-        return version + " " + build
+        return (version + " " + build).strip()
     else:
         _version = lower_bound or version
         if _version:
@@ -586,7 +586,7 @@ def _apply_pin_compatible(
                 compatibility += f"<{upper_bound}"
             else:
                 compatibility = apply_pin_expressions(_version, min_pin, max_pin)
-            return compatibility
+            return compatibility.strip()
         else:
             raise ValueError("No version or lower bound found for pin_compatible!")
 
@@ -646,11 +646,13 @@ def replace_pin_comaptible(reqs, host_reqs):
                     args.append(part.strip())
 
             new_reqs.append(
-                name
-                + " "
-                + _apply_pin_compatible(host_version, host_build, *args, **kwargs)
-                + " "
-                + build
+                (
+                    name
+                    + " "
+                    + _apply_pin_compatible(host_version, host_build, *args, **kwargs)
+                    + " "
+                    + build
+                ).strip()
             )
         else:
             new_reqs.append(req)
