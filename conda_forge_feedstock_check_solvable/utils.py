@@ -591,7 +591,7 @@ def _apply_pin_compatible(
             raise ValueError("No version or lower bound found for pin_compatible!")
 
 
-def replace_pin_comaptible(reqs, host_reqs):
+def replace_pin_compatible(reqs, host_reqs):
     host_lookup = {req.split(" ")[0]: req.split(" ")[1:] for req in host_reqs}
 
     new_reqs = []
