@@ -519,10 +519,37 @@ def apply_pins(reqs, host_req, build_req, outnames, m):
             pinned_req.append(
                 get_pin_from_build(m, dep, full_build_dep_versions),
             )
-        except Exception:
+        except Exception as e:
+            print_critical(
+                "Failed to apply pin for {}, falling back to req: {}".format(
+                    dep, repr(e)
+                ),
+            )
             # in case we couldn't apply pins for whatever
             # reason, fall back to the req
             pinned_req.append(dep)
 
     pinned_req = _filter_problematic_reqs(pinned_req)
     return pinned_req
+
+
+def correct_for_missing_jinja2(reqs):
+    """Insert a * for the version if a jinja2 function evaluated to only the requirement name."""
+    new_reqs = []
+    for req in reqs:
+        if "  " in req:
+            parts = req.split("  ")
+            if len(parts) == 2:
+                parts = [p.strip() for p in parts]
+                parts = [parts[0], "*", parts[1]]
+                new_reqs.append(" ".join(parts))
+            else:
+                print_critical(
+                    "Odd requirement split on double-space: %s! Using original requirements."
+                    % req
+                )
+                new_reqs.append(req)
+        else:
+            new_reqs.append(req)
+
+    return new_reqs

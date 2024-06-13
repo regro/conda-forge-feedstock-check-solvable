@@ -14,6 +14,7 @@ from conda_forge_feedstock_check_solvable.utils import (
     TimeoutTimer,
     TimeoutTimerException,
     apply_pins,
+    correct_for_missing_jinja2,
     get_run_exports,
     override_env_var,
     print_debug,
@@ -384,6 +385,7 @@ def _is_recipe_solvable_on_platform(
         if run_req:
             run_req = apply_pins(run_req, host_req or [], build_req or [], outnames, m)
             run_req = remove_reqs_by_name(run_req, outnames)
+            run_req = correct_for_missing_jinja2(run_req)
             _solvable, _err, _ = solver.solve(
                 run_req,
                 constraints=run_constrained,
@@ -406,6 +408,7 @@ def _is_recipe_solvable_on_platform(
         )
         if tst_req:
             tst_req = remove_reqs_by_name(tst_req, outnames)
+            tst_req = correct_for_missing_jinja2(tst_req)
             _solvable, _err, _ = solver.solve(
                 tst_req,
                 constraints=run_constrained,
