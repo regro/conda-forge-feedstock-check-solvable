@@ -382,11 +382,7 @@ def _is_recipe_solvable_on_platform(
                     | host_rx["strong_constrains"]
                 )
 
-        pin_compat_req = (
-            (host_req or [])
-            if m.is_cross and not m.build_is_host
-            else (build_req or [])
-        )
+        pin_compat_req = (host_req or []) if m.is_cross else (build_req or [])
 
         run_constrained = apply_pins(
             run_constrained, host_req or [], build_req or [], outnames, m
