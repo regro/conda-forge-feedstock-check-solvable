@@ -7,14 +7,17 @@ import subprocess
 import tempfile
 import time
 import traceback
+import unittest.mock
 from collections.abc import Mapping
 
+import conda_build.api
 import conda_package_handling.api
 import rapidjson as json
 import requests
 import wurlitzer
 import zstandard
 from conda.models.match_spec import MatchSpec
+from conda_build.jinja_context import context_processor as conda_build_context_processor
 from conda_build.utils import download_channeldata
 from conda_forge_metadata.artifact_info import get_artifact_info_as_json
 
@@ -533,22 +536,122 @@ def apply_pins(reqs, host_req, build_req, outnames, m):
     return pinned_req
 
 
-def correct_for_missing_jinja2(reqs):
-    """Insert a * for the version if a jinja2 function evaluated to only the requirement name."""
+def _render_with_name(name, *args, **kwargs):
+    out = name + "("
+    for arg in args:
+        out += repr(arg) + ","
+    for k, v in kwargs.items():
+        out += k + "=" + repr(v) + ","
+    out = out[:-1]
+    out += ")"
+    return out
+
+
+def _custom_context_processor(*args, **kwargs):
+    """Custom context processor for conda_build that changes pin_compatible."""
+    ctx = conda_build_context_processor(*args, **kwargs)
+    ctx["pin_compatible"] = lambda *args, **kwargs: _render_with_name(
+        "pin_compatible", *args, **kwargs
+    )
+    return ctx
+
+
+def conda_build_api_render(*args, **kwargs):
+    """Run conda_build.api.render with a patched jinja2 context for pin_compatible."""
+    with unittest.mock.patch(
+        "conda_build.jinja_context.context_processor", new=_custom_context_processor
+    ):
+        return conda_build.api.render(*args, **kwargs)
+
+
+def _apply_pin_compatible(
+    version,
+    build,
+    lower_bound=None,
+    upper_bound=None,
+    min_pin="x.x.x.x.x.x",
+    max_pin="x",
+    exact=False,
+):
+    from conda_build.utils import apply_pin_expressions
+
+    if exact:
+        return version + " " + build
+    else:
+        _version = lower_bound or version
+        if _version:
+            if upper_bound:
+                if min_pin or lower_bound:
+                    compatibility = ">=" + str(_version) + ","
+                compatibility += f"<{upper_bound}"
+            else:
+                compatibility = apply_pin_expressions(_version, min_pin, max_pin)
+            return compatibility
+        else:
+            raise ValueError("No version or lower bound found for pin_compatible!")
+
+
+def replace_pin_comaptible(reqs, host_reqs):
+    host_lookup = {req.split(" ")[0]: req.split(" ")[1:] for req in host_reqs}
+
     new_reqs = []
     for req in reqs:
-        if "  " in req:
-            parts = req.split("  ")
+        if "pin_compatible(" in req:
+            if not req.startswith("pin_compatible("):
+                raise ValueError("Very odd pinning: %s!" % req)
+            parts = req.rsplit(")", 1)
             if len(parts) == 2:
-                parts = [p.strip() for p in parts]
-                parts = [parts[0], "*", parts[1]]
-                new_reqs.append(" ".join(parts))
+                build = parts[1].strip()
             else:
-                print_critical(
-                    "Odd requirement split on double-space: %s! Using original requirements."
-                    % req
+                build = ""
+
+            parts = parts[0].split("pin_compatible(")[1]
+            parts = parts.split(",")
+            name = parts[0].strip()
+            if name.startswith('"') and name.endswith('"'):
+                name = name[1:-1]
+            elif name.startswith("'") and name.endswith("'"):
+                name = name[1:-1]
+            parts = parts[1:]
+
+            if name not in host_lookup:
+                raise ValueError(
+                    "Very odd pinning: %s! Package %s not found in host %r!"
+                    % (req, name, host_lookup)
                 )
-                new_reqs.append(req)
+            if not host_lookup[name]:
+                raise ValueError(
+                    "Very odd pinning: %s! Package found in host but no version %r!"
+                    % (req, host_lookup[name])
+                )
+
+            host_version = host_lookup[name][0]
+            if len(host_lookup[name]) > 1:
+                host_build = host_lookup[name][1]
+                if build and "exact=true" in req.lower():
+                    raise ValueError(
+                        "Build string cannot be given for pin_compatible with exact=True! %r"
+                        % req
+                    )
+            else:
+                host_build = ""
+
+            args = []
+            kwargs = {}
+            for part in parts:
+                if "=" in part:
+                    k, v = part.split("=")
+                    kwargs[k.strip()] = v.strip()
+                else:
+                    args.append(part.strip())
+
+            new_reqs.append(
+                name
+                + " "
+                + _apply_pin_compatible(host_version, host_build, *args, **kwargs)
+                + " "
+                + build
+            )
         else:
             new_reqs.append(req)
 

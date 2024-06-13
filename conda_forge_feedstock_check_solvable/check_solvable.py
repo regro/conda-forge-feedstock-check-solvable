@@ -1,8 +1,10 @@
 import glob
 import os
+import pprint
 from typing import Dict, List, Tuple
 
-import conda_build.api
+import conda_build.config
+import conda_build.variants
 import psutil
 from ruamel.yaml import YAML
 
@@ -14,13 +16,14 @@ from conda_forge_feedstock_check_solvable.utils import (
     TimeoutTimer,
     TimeoutTimerException,
     apply_pins,
-    correct_for_missing_jinja2,
+    conda_build_api_render,
     get_run_exports,
     override_env_var,
     print_debug,
     print_info,
     print_warning,
     remove_reqs_by_name,
+    replace_pin_comaptible,
     suppress_output,
 )
 from conda_forge_feedstock_check_solvable.virtual_packages import (
@@ -254,7 +257,7 @@ def _is_recipe_solvable_on_platform(
         timeout_timer.raise_for_timeout()
 
         # now we render the meta.yaml into an actual recipe
-        metas = conda_build.api.render(
+        metas = conda_build_api_render(
             recipe_dir,
             platform=platform,
             arch=arch,
@@ -383,9 +386,14 @@ def _is_recipe_solvable_on_platform(
             run_constrained, host_req or [], build_req or [], outnames, m
         )
         if run_req:
+            print_debug("run reqs before pins:\n\n%s\n" % pprint.pformat(run_req))
             run_req = apply_pins(run_req, host_req or [], build_req or [], outnames, m)
             run_req = remove_reqs_by_name(run_req, outnames)
-            run_req = correct_for_missing_jinja2(run_req)
+            run_req = replace_pin_comaptible(
+                run_req, host_req if m.is_cross and not m.build_is_host else build_req
+            )
+            print_debug("run reqs after pins:\n\n%s\n" % pprint.pformat(run_req))
+
             _solvable, _err, _ = solver.solve(
                 run_req,
                 constraints=run_constrained,
@@ -407,8 +415,12 @@ def _is_recipe_solvable_on_platform(
             + run_req
         )
         if tst_req:
+            print_debug("test reqs before pins:\n\n%s\n" % pprint.pformat(tst_req))
             tst_req = remove_reqs_by_name(tst_req, outnames)
-            tst_req = correct_for_missing_jinja2(tst_req)
+            tst_req = replace_pin_comaptible(
+                tst_req, host_req if m.is_cross and not m.build_is_host else build_req
+            )
+            print_debug("test reqs after pins:\n\n%s\n" % pprint.pformat(tst_req))
             _solvable, _err, _ = solver.solve(
                 tst_req,
                 constraints=run_constrained,
