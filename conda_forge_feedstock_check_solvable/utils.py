@@ -591,6 +591,15 @@ def _apply_pin_compatible(
             raise ValueError("No version or lower bound found for pin_compatible!")
 
 
+def _strip_quotes(s):
+    if s.startswith('"') and s.endswith('"'):
+        return s[1:-1]
+    elif s.startswith("'") and s.endswith("'"):
+        return s[1:-1]
+    else:
+        return s
+
+
 def replace_pin_compatible(reqs, host_reqs):
     host_lookup = {req.split(" ")[0]: req.split(" ")[1:] for req in host_reqs}
 
@@ -607,11 +616,7 @@ def replace_pin_compatible(reqs, host_reqs):
 
             parts = parts[0].split("pin_compatible(")[1]
             parts = parts.split(",")
-            name = parts[0].strip()
-            if name.startswith('"') and name.endswith('"'):
-                name = name[1:-1]
-            elif name.startswith("'") and name.endswith("'"):
-                name = name[1:-1]
+            name = _strip_quotes(parts[0].strip())
             parts = parts[1:]
 
             if name not in host_lookup:
@@ -641,7 +646,7 @@ def replace_pin_compatible(reqs, host_reqs):
             for part in parts:
                 if "=" in part:
                     k, v = part.split("=")
-                    kwargs[k.strip()] = v.strip()
+                    kwargs[k.strip()] = _strip_quotes(v.strip())
                 else:
                     args.append(part.strip())
 

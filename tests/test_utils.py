@@ -2,6 +2,7 @@ import pytest
 
 from conda_forge_feedstock_check_solvable.utils import (
     DEFAULT_RUN_EXPORTS,
+    _apply_pin_compatible,
     _convert_run_exports_to_canonical_form,
     _get_run_exports_from_artifact_info,
     _get_run_exports_from_download,
@@ -9,6 +10,7 @@ from conda_forge_feedstock_check_solvable.utils import (
     _has_run_exports_in_channel_data,
     convert_spec_to_conda_build,
     get_run_exports,
+    replace_pin_compatible,
 )
 
 
@@ -95,3 +97,47 @@ def test_utils_get_run_exports(full_channel_url, filename, expected):
         )
         == expected
     )
+
+
+def test_apply_pin_compatible():
+    version = "1.2.3"
+    build = "h24524543_0"
+    assert _apply_pin_compatible(version, build) == ">=1.2.3,<2.0a0"
+    assert (
+        _apply_pin_compatible(version, build, lower_bound="1.2.4") == ">=1.2.4,<2.0a0"
+    )
+    assert (
+        _apply_pin_compatible(version, build, upper_bound="1.2.4") == ">=1.2.3,<1.2.4"
+    )
+    assert (
+        _apply_pin_compatible(version, build, lower_bound="1.2.4", upper_bound="1.2.5")
+        == ">=1.2.4,<1.2.5"
+    )
+    assert _apply_pin_compatible(version, build, exact=True) == f"{version} {build}"
+    assert _apply_pin_compatible(version, build, max_pin="x.x") == ">=1.2.3,<1.3.0a0"
+    assert (
+        _apply_pin_compatible(version, build, min_pin="x.x", max_pin="x")
+        == ">=1.2,<2.0a0"
+    )
+
+
+def test_replace_pin_compatible():
+    host_reqs = [
+        "foo 1.2.3 5",
+        "bar 2.3 1",
+        "baz 3.4 h5678_1",
+    ]
+    reqs = [
+        "pin_compatible('foo') mpi_*",
+        "pin_compatible('bar', exact=True)",
+        "pin_compatible('baz', upper_bound='3.8')",
+        "pin_compatible('baz', lower_bound=3.5, upper_bound='3.8')",
+        "pin_compatible('foo', max_pin='x.x')",
+    ]
+    assert replace_pin_compatible(reqs, host_reqs) == [
+        "foo >=1.2.3,<2.0a0 mpi_*",
+        "bar 2.3 1",
+        "baz >=3.4,<3.8",
+        "baz >=3.5,<3.8",
+        "foo >=1.2.3,<1.3.0a0",
+    ]
