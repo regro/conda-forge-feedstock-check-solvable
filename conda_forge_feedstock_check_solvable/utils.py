@@ -592,6 +592,7 @@ def _apply_pin_compatible(
 
 
 def replace_pin_comaptible(reqs, host_reqs):
+    host_reqs = host_reqs or []
     host_lookup = {req.split(" ")[0]: req.split(" ")[1:] for req in host_reqs}
 
     new_reqs = []
