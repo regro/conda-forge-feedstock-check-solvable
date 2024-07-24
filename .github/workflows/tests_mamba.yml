@@ -18,22 +18,20 @@ jobs:
     name: tests-mamba
     runs-on: "ubuntu-latest"
     steps:
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v3
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           fetch-depth: 0
 
-      - uses: conda-incubator/setup-miniconda@a4260408e20b96e80095f42ff7f1a15b27dd94ca # v2
+      - uses: conda-incubator/setup-miniconda@a4260408e20b96e80095f42ff7f1a15b27dd94ca # v3.0.4
         with:
-          channels: conda-forge,defaults
+          channels: conda-forge
           channel-priority: strict
           show-channel-urls: true
           miniforge-version: latest
-          miniforge-variant: Mambaforge
           python-version: 3.11
-          use-mamba: true
 
       - name: configure conda and install code
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
           mamba install --yes --file=requirements.txt
           mamba install --yes pytest flaky pip python-build setuptools_scm>=7 setuptools>=45 toml
@@ -64,6 +62,6 @@ jobs:
           python -m pip install -v --no-deps --no-build-isolation -e .
 
       - name: test w/ mamba
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
           pytest -vv --durations=0 --solver=mamba tests
