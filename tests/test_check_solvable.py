@@ -302,6 +302,24 @@ def test_cupy_solvable(tmp_path, solver):
 
 
 @flaky
+def test_hpp_fcl_solvable(tmp_path, solver):
+    feedstock_dir = clone_and_checkout_repo(
+        tmp_path,
+        "https://github.com/conda-forge/hpp-fcl-feedstock",
+        ref="main",
+    )
+    solvable, errors, solvable_by_variant = is_recipe_solvable(
+        feedstock_dir,
+        solver=solver,
+        verbosity=VERB,
+        timeout=None,
+        fail_fast=True,
+    )
+    pprint.pprint(solvable_by_variant)
+    assert solvable, pprint.pformat(errors)
+
+
+@flaky
 def test_run_exports_constrains_conflict(feedstock_dir, tmp_path_factory, solver):
     recipe_file = os.path.join(feedstock_dir, "recipe", "meta.yaml")
     os.makedirs(os.path.dirname(recipe_file), exist_ok=True)
