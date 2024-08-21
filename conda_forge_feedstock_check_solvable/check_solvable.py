@@ -330,6 +330,8 @@ def _is_recipe_solvable_on_platform(
                 errors.append(_err)
             if not solvable and fail_fast:
                 break
+            if not _solvable:
+                continue
 
             run_constrained = list(set(run_constrained) | build_rx["strong_constrains"])
 
@@ -369,6 +371,8 @@ def _is_recipe_solvable_on_platform(
                 errors.append(_err)
             if not solvable and fail_fast:
                 break
+            if not _solvable:
+                continue
 
             if m.is_cross:
                 if m.noarch or m.noarch_python:
@@ -408,6 +412,8 @@ def _is_recipe_solvable_on_platform(
                 errors.append(_err)
             if not solvable and fail_fast:
                 break
+            if not _solvable:
+                continue
 
         tst_req = (
             m.get_value("test/requires", [])
@@ -433,6 +439,8 @@ def _is_recipe_solvable_on_platform(
                 errors.append(_err)
             if not solvable and fail_fast:
                 break
+            if not _solvable:
+                continue
 
     print_info("RUN EXPORT CACHE STATUS: %s", get_run_exports.cache_info())
     print_info("SOLVER CACHE STATUS: %s", solver_factory.cache_info())

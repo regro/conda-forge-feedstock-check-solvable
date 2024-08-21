@@ -175,6 +175,21 @@ def test_pandas_solvable(solver):
     assert solvable, pprint.pformat(errors)
 
 
+@flaky
+def test_hpp_fcl_solvable_runs(solver):
+    feedstock_dir = os.path.join(os.path.dirname(__file__), "hpp-fcl-feedstock")
+    is_recipe_solvable(
+        feedstock_dir,
+        solver=solver,
+        verbosity=VERB,
+        build_platform=dict(
+            linux_aarch64="linux_64",
+            linux_ppc64le="linux_64",
+            osx_arm64="osx_64",
+        ),
+    )
+
+
 def clone_and_checkout_repo(base_path: pathlib.Path, origin_url: str, ref: str):
     subprocess.run(
         f"cd {base_path} && git clone {origin_url} repo",
@@ -289,24 +304,6 @@ def test_cupy_solvable(tmp_path, solver):
         f"cd {feedstock_dir} && git checkout 72d6c5808ca79c9cd9a3eb4064a72586c73c3430",
         shell=True,
         check=True,
-    )
-    solvable, errors, solvable_by_variant = is_recipe_solvable(
-        feedstock_dir,
-        solver=solver,
-        verbosity=VERB,
-        timeout=None,
-        fail_fast=True,
-    )
-    pprint.pprint(solvable_by_variant)
-    assert solvable, pprint.pformat(errors)
-
-
-@flaky
-def test_hpp_fcl_solvable(tmp_path, solver):
-    feedstock_dir = clone_and_checkout_repo(
-        tmp_path,
-        "https://github.com/conda-forge/hpp-fcl-feedstock",
-        ref="main",
     )
     solvable, errors, solvable_by_variant = is_recipe_solvable(
         feedstock_dir,
