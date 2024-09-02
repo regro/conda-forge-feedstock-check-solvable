@@ -125,7 +125,8 @@ def _is_recipe_solvable(
         if len(cbcs) == 0:
             errors.append(
                 "No `.ci_support/*.yaml` files found! This can happen when a rerender "
-                "results in no builds for a recipe (e.g., a recipe is python 2.7 only). "
+                "results in no builds for a recipe (e.g., a recipe is "
+                "python 2.7 only). "
                 "This attempted migration is being reported as not solvable.",
             )
             print_warning(errors[-1])
@@ -145,7 +146,8 @@ def _is_recipe_solvable(
         for cbc_fname in cbcs:
             timeout_timer.raise_for_timeout()
 
-            # we need to extract the platform (e.g., osx, linux) and arch (e.g., 64, aarm64)
+            # we need to extract the platform (e.g., osx, linux)
+            #  and arch (e.g., 64, aarm64)
             # conda smithy forms a string that is
             #
             #  {{ platform }} if arch == 64
