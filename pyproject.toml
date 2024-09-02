@@ -37,8 +37,6 @@ select = [
     "E", "W",
     # isort
     "I",
-    # pep8-naming
-    "N",
     # flake8-logging-format
     "G",
     # flake8-tidy-imports
