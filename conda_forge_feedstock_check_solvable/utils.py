@@ -272,7 +272,8 @@ def _get_run_exports_from_download(channel_url, subdir, pkg):
         try:
             # download
             subprocess.run(
-                f"cd {tmpdir} && curl -s -L {channel_url}/{subdir}/{pkg} --output {pkg}",
+                f"cd {tmpdir} && curl -s -L "
+                f"{channel_url}/{subdir}/{pkg} --output {pkg}",
                 shell=True,
             )
 
@@ -635,7 +636,8 @@ def replace_pin_compatible(reqs, host_reqs):
                 host_build = host_lookup[name][1]
                 if build and "exact=true" in req.lower():
                     raise ValueError(
-                        "Build string cannot be given for pin_compatible with exact=True! %r"
+                        "Build string cannot be given for "
+                        "pin_compatible with exact=True! %r"
                         % req
                     )
             else:
