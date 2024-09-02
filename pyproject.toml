@@ -29,12 +29,20 @@ exclude = ['tests*']
 write_to = "conda_forge_feedstock_check_solvable/_version.py"
 write_to_template = "__version__ = '{version}'\n"
 
-[tool.black]
-line-length = 88
-
-[tool.isort]
-profile = "black"
-
-[tool.flake8]
-ignore = ['E203']
-max-line-length = 88
+[tool.ruff.lint]
+select = [
+    # pyflakes
+    "F",
+    # pycodestyle
+    "E", "W",
+    # isort
+    "I",
+    # pep8-naming
+    "N",
+    # pypugrade
+    "UP",
+    # flake8-logging-format
+    "G",
+    # flake8-tidy-imports
+    "TID",
+]
