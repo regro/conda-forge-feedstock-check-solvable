@@ -39,8 +39,6 @@ select = [
     "I",
     # pep8-naming
     "N",
-    # pypugrade
-    "UP",
     # flake8-logging-format
     "G",
     # flake8-tidy-imports
