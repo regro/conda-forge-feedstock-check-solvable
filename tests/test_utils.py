@@ -145,21 +145,23 @@ def test_replace_pin_compatible():
 
 def test_replace_pin_compatible_raises():
     with pytest.raises(ValueError) as e:
-        replace_pin_compatible(["pin_compatible('foo') mpi_*"], [])
+        replace_pin_compatible(["pin_compatible('foo') mpi_*"], [], strict=True)
     assert "Package foo not found in host" in str(e.value)
 
     with pytest.raises(ValueError) as e:
-        replace_pin_compatible(["pin_compatible('foo') mpi_*"], ["foo"])
+        replace_pin_compatible(["pin_compatible('foo') mpi_*"], ["foo"], strict=True)
     assert "Package found in host but no version" in str(e.value)
 
     with pytest.raises(ValueError) as e:
         replace_pin_compatible(
-            ["pin_compatible('foo', exact=True) mpi_*"], ["foo 14 dfgdfs"]
+            ["pin_compatible('foo', exact=True) mpi_*"], ["foo 14 dfgdfs"], strict=True
         )
     assert "Build string cannot be given for pin_compatible with exact=True!" in str(
         e.value
     )
 
     with pytest.raises(ValueError) as e:
-        replace_pin_compatible(["5 pin_compatible('foo') mpi_*"], ["foo 14 dfgdfs"])
+        replace_pin_compatible(
+            ["5 pin_compatible('foo') mpi_*"], ["foo 14 dfgdfs"], strict=True
+        )
     assert "Very odd" in str(e.value)
