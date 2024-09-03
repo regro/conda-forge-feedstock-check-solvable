@@ -190,6 +190,16 @@ def test_hpp_fcl_solvable_runs(solver):
     )
 
 
+@flaky
+def test_biopython_solvable_runs(solver):
+    feedstock_dir = os.path.join(os.path.dirname(__file__), "biopython-feedstock")
+    is_recipe_solvable(
+        feedstock_dir,
+        solver=solver,
+        verbosity=VERB,
+    )
+
+
 def clone_and_checkout_repo(base_path: pathlib.Path, origin_url: str, ref: str):
     subprocess.run(
         f"cd {base_path} && git clone {origin_url} repo",

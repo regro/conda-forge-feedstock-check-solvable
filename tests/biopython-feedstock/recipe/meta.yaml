@@ -1,0 +1,110 @@
+{% set name = "biopython" %}
+{% set version = "1.84" %}
+{% set sha256 = "60fbe6f996e8a6866a42698c17e552127d99a9aab3259d6249fbaabd0e0cc7b4" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  fn: {{ name }}-{{ version }}.tar.gz
+  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
+  sha256: {{ sha256 }}
+
+build:
+  number: 0
+  script: {{ PYTHON }} -m pip install . --no-deps --ignore-installed --no-cache-dir -vvv
+  skip: true  # [py<39]
+
+requirements:
+  build:
+    - python                                 # [build_platform != target_platform]
+    - cross-python_{{ target_platform }}     # [build_platform != target_platform]
+    - {{ compiler('c') }}
+    - {{ stdlib("c") }}
+  host:
+    - python
+    - pip
+  run:
+    - python
+    - {{ pin_compatible('numpy') }}
+
+test:
+  imports:
+    - Bio
+    - Bio.Affy
+    - Bio.Align
+    - Bio.Align.Applications
+    - Bio.AlignIO
+    - Bio.Application
+    - Bio.Blast
+    - Bio.CAPS
+    - Bio.Cluster
+    - Bio.Compass
+    - Bio.Data
+    - Bio.Emboss
+    - Bio.Entrez
+    - Bio.ExPASy
+    - Bio.GenBank
+    - Bio.Geo
+    #Requires soft dependency reportlab
+    #- Bio.Graphics
+    #- Bio.Graphics.GenomeDiagram
+    - Bio.HMM
+    - Bio.KEGG
+    - Bio.KEGG.Compound
+    - Bio.KEGG.Enzyme
+    - Bio.KEGG.KGML
+    - Bio.KEGG.Map
+    - Bio.Medline
+    - Bio.NMR
+    - Bio.Nexus
+    - Bio.PDB
+    #Requires soft dependency mmtf-python
+    #- Bio.PDB.mmtf
+    - Bio.Pathway
+    - Bio.Pathway.Rep
+    - Bio.Phylo
+    - Bio.Phylo.Applications
+    - Bio.Phylo.PAML
+    - Bio.PopGen
+    - Bio.PopGen.GenePop
+    - Bio.Restriction
+    - Bio.SCOP
+    - Bio.SVDSuperimposer
+    - Bio.SearchIO
+    - Bio.SearchIO.BlastIO
+    - Bio.SearchIO.ExonerateIO
+    - Bio.SearchIO.HmmerIO
+    - Bio.SearchIO._model
+    - Bio.SeqIO
+    - Bio.SeqUtils
+    - Bio.Sequencing
+    - Bio.Sequencing.Applications
+    - Bio.SwissProt
+    - Bio.TogoWS
+    - Bio.UniGene
+    - Bio.UniProt
+    - Bio.codonalign
+    - Bio.cpairwise2
+    - Bio.motifs
+    - Bio.motifs.applications
+    - Bio.motifs.jaspar
+    - Bio.phenotype
+    - BioSQL
+
+about:
+  home: http://biopython.org
+  license: LicenseRef-Biopython
+  license_file: LICENSE.rst
+  summary: Collection of freely available tools for computational molecular biology
+  description: |
+    Biopython is a collection of freely available Python tools for
+    computational molecular biology
+  doc_url: http://biopython.org
+  dev_url: https://github.com/biopython/biopython
+
+extra:
+  recipe-maintainers:
+    - souravsingh
+    - peterjc

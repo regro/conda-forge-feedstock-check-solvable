@@ -601,7 +601,27 @@ def _strip_quotes(s):
         return s
 
 
-def replace_pin_compatible(reqs, host_reqs):
+def replace_pin_compatible(reqs, host_reqs, strict=False):
+    """Replace pin_compatible with the appropriate version constraint.
+
+    Parameters
+    ----------
+    reqs : list of str
+        The requirements to replace pin_compatible in.
+    host_reqs : list of str
+        The requirements from the host section which is used to determine the
+        compatibility ranges.
+    strict : bool, optional
+        If True, raise an error if the package is not found in the host section.
+        If False, just add the package without a version constraint. Default is False
+        to match conda-build behavior.
+
+    Returns
+    -------
+    list of str
+        The requirements with pin_compatible replaced with the appropriate version
+        constraint.
+    """
     host_lookup = {req.split(" ")[0]: req.split(" ")[1:] for req in host_reqs}
 
     new_reqs = []
@@ -620,16 +640,27 @@ def replace_pin_compatible(reqs, host_reqs):
             name = _strip_quotes(parts[0].strip())
             parts = parts[1:]
 
-            if name not in host_lookup:
-                raise ValueError(
-                    "Very odd pinning: %s! Package %s not found in host %r!"
-                    % (req, name, host_lookup)
-                )
-            if not host_lookup[name]:
-                raise ValueError(
-                    "Very odd pinning: %s! Package found in host but no version %r!"
-                    % (req, host_lookup[name])
-                )
+            if name not in host_lookup or not host_lookup[name]:
+                if strict:
+                    if name not in host_lookup:
+                        raise ValueError(
+                            "Very odd pinning: %s! Package %s not found in host %r!"
+                            % (req, name, host_lookup)
+                        )
+                    else:
+                        raise ValueError(
+                            (
+                                "Very odd pinning: %s! Package found in host "
+                                "but no version %r!"
+                            )
+                            % (req, host_lookup[name])
+                        )
+                else:
+                    if build:
+                        new_reqs.append(name + " * " + build)
+                    else:
+                        new_reqs.append(name)
+                    continue
 
             host_version = host_lookup[name][0]
             if len(host_lookup[name]) > 1:
