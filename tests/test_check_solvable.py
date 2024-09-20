@@ -572,3 +572,21 @@ python_impl:
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
     assert any("python3.10" in k for k in solvable_by_variant)
+
+
+def test_jolt_physics_rattler(tmp_path):
+    """test the new recipe format"""
+    feedstock_dir = clone_and_checkout_repo(
+        tmp_path,
+        "https://github.com/conda-forge/jolt-physics-feedstock",
+        ref="main",
+    )
+    solvable, errors, solvable_by_variant = is_recipe_solvable(
+        feedstock_dir,
+        solver="rattler",
+        verbosity=VERB,
+        timeout=None,
+        fail_fast=True,
+    )
+    pprint.pprint(solvable_by_variant)
+    assert solvable, pprint.pformat(errors)

@@ -10,6 +10,7 @@ from ruamel.yaml import YAML
 
 import conda_forge_feedstock_check_solvable.utils
 from conda_forge_feedstock_check_solvable.mamba_solver import mamba_solver_factory
+from conda_forge_feedstock_check_solvable.rattler_build import invoke_rattler_build
 from conda_forge_feedstock_check_solvable.rattler_solver import rattler_solver_factory
 from conda_forge_feedstock_check_solvable.utils import (
     MAX_GLIBC_MINOR,
@@ -24,7 +25,6 @@ from conda_forge_feedstock_check_solvable.utils import (
     print_warning,
     remove_reqs_by_name,
     replace_pin_compatible,
-    suppress_output,
 )
 from conda_forge_feedstock_check_solvable.virtual_packages import (
     virtual_package_repodata,
@@ -132,7 +132,12 @@ def _is_recipe_solvable(
             print_warning(errors[-1])
             return False, errors, {}
 
-        if not os.path.exists(os.path.join(feedstock_dir, "recipe", "meta.yaml")):
+        meta_exists = os.path.exists(os.path.join(feedstock_dir, "recipe", "meta.yaml"))
+        recipe_exists = os.path.exists(
+            os.path.join(feedstock_dir, "recipe", "recipe.yaml")
+        )
+
+        if not (meta_exists or recipe_exists):
             errors.append(
                 "No `recipe/meta.yaml` file found! This issue is quite weird and "
                 "someone should investigate!",
@@ -187,8 +192,8 @@ def _is_recipe_solvable(
 
 
 def _is_recipe_solvable_on_platform(
-    recipe_dir,
-    cbc_path,
+    recipe_dir: str,
+    cbc_path: str,
     platform,
     arch,
     build_platform_arch=None,
@@ -234,42 +239,62 @@ def _is_recipe_solvable_on_platform(
     # it would be used in a real build
     print_debug("rendering recipe with conda build")
 
-    with suppress_output():
-        for att in range(2):
-            timeout_timer.raise_for_timeout()
-            try:
-                if att == 1:
-                    os.system("rm -f %s/conda_build_config.yaml" % recipe_dir)
-                config = conda_build.config.get_or_merge_config(
-                    None,
-                    platform=platform,
-                    arch=arch,
-                    variant_config_files=[cbc_path],
-                )
-                cbc, _ = conda_build.variants.get_package_combined_spec(
-                    recipe_dir,
-                    config=config,
-                )
-            except Exception as e:
-                if att == 0:
-                    pass
-                else:
-                    raise e
-
+    # with suppress_output():
+    for att in range(2):
         timeout_timer.raise_for_timeout()
+        try:
+            if att == 1:
+                os.system("rm -f %s/conda_build_config.yaml" % recipe_dir)
+            config = conda_build.config.get_or_merge_config(
+                None,
+                platform=platform,
+                arch=arch,
+                variant_config_files=[cbc_path],
+            )
+            cbc, _ = conda_build.variants.get_package_combined_spec(
+                recipe_dir,
+                config=config,
+            )
+        except Exception as e:
+            if att == 0:
+                pass
+            else:
+                raise e
 
-        # now we render the meta.yaml into an actual recipe
-        metas = conda_build_api_render(
+    timeout_timer.raise_for_timeout()
+
+    # now we render the meta.yaml into an actual recipe
+    print("Recipe dir: ", recipe_dir)
+
+    if os.path.exists(os.path.join(recipe_dir, "recipe.yaml")):
+        print("Recipe YAMLING!")
+        # this is a rattler-build recipe so we can invoke rattler-build with
+        # the new `cbc`.
+        solvable, errors = invoke_rattler_build(
             recipe_dir,
-            platform=platform,
-            arch=arch,
-            ignore_system_variants=True,
+            channels=channel_sources,
+            build_platform=f"{platform}-{arch}",
+            host_platform=f"{platform}-{arch}",
             variants=cbc,
-            permit_undefined_jinja=True,
-            finalize=False,
-            bypass_env_check=True,
-            channel_urls=channel_sources,
         )
+
+        if errors:
+            print_warning("Rattler build errors: %s", errors)
+            errors = [f"Rattler build errors: {errors}"]
+
+        return solvable, errors
+
+    metas = conda_build_api_render(
+        recipe_dir,
+        platform=platform,
+        arch=arch,
+        ignore_system_variants=True,
+        variants=cbc,
+        permit_undefined_jinja=True,
+        finalize=False,
+        bypass_env_check=True,
+        channel_urls=channel_sources,
+    )
 
     timeout_timer.raise_for_timeout()
 
