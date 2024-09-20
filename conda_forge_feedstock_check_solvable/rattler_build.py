@@ -1,5 +1,7 @@
-import os
 import subprocess
+import tempfile
+
+import yaml
 
 from conda_forge_feedstock_check_solvable.virtual_packages import (
     virtual_package_repodata,
@@ -9,9 +11,9 @@ from conda_forge_feedstock_check_solvable.virtual_packages import (
 def run_rattler_build(command):
     try:
         # Run the command and capture output
-        print(" ".join(command))
+        print("Running: ", " ".join(command))
         result = subprocess.run(
-            command, shell=True, check=False, capture_output=True, text=True
+            " ".join(command), shell=True, check=False, capture_output=True, text=True
         )
 
         # Get the status code
@@ -29,37 +31,33 @@ def run_rattler_build(command):
 def invoke_rattler_build(
     recipe_dir: str, channels, build_platform, host_platform, variants
 ) -> (bool, str):
-    print("invoke_rattler_build")
+    # this is OK since there is an lru cache
     virtual_package_repo_url = virtual_package_repodata()
+    # create a temporary file and dump the variants as YAML
 
-    channels_args = []
-    for c in channels:
-        channels_args.extend(["-c", c])
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as variants_file:
+        yaml.dump(variants, variants_file)
+        variants_file.flush()
 
-    channels_args.extend(["-c", virtual_package_repo_url])
+        channels_args = []
+        for c in channels:
+            channels_args.extend(["-c", c])
 
-    variants_args = []
-    # for v in variants:
-    # variants_args.extend(["-m", v])
-    args = (
-        ["rattler-build", "build", "--recipe", recipe_dir]
-        + channels_args
-        + ["--target-platform", host_platform, "--build-platform", build_platform]
-        + variants_args
-        + ["--render-only", "--with-solve"]
-    )
-    print(" ".join(args))
+        channels_args.extend(["-c", virtual_package_repo_url])
 
-    recipe = os.path.join(recipe_dir, "recipe.yaml")
-    status, out, err = run_rattler_build(
-        ["rattler-build", "build", "--recipe", recipe]  # + channels_args + \
-        # ["--target-platform", host_platform, "--build-platform", build_platform] + \
-        # variants_args + \
-        # ["--render-only", "--with-solve"]
-    )
+        args = (
+            ["rattler-build", "build", "--recipe", recipe_dir]
+            + channels_args
+            + ["--target-platform", host_platform]
+            + ["--build-platform", build_platform]
+            + ["-m", variants_file.name]
+            + ["--render-only", "--with-solve"]
+        )
 
-    if status == 0:
-        print(out, err)
-        return True, ""
-    else:
-        return False, out + err
+        status, out, err = run_rattler_build(args)
+
+        if status == 0:
+            print(out, err)
+            return True, ""
+        else:
+            return False, out + err
