@@ -264,11 +264,7 @@ def _is_recipe_solvable_on_platform(
 
         timeout_timer.raise_for_timeout()
 
-        # now we render the meta.yaml into an actual recipe
-        print("Recipe dir: ", recipe_dir)
-
         if os.path.exists(os.path.join(recipe_dir, "recipe.yaml")):
-            print("Recipe YAMLING!")
             # this is a rattler-build recipe so we can invoke rattler-build with
             # the new `cbc`.
             solvable, errors = invoke_rattler_build(
@@ -285,6 +281,7 @@ def _is_recipe_solvable_on_platform(
 
             return solvable, errors
 
+        # now we render the meta.yaml into an actual recipe
         metas = conda_build_api_render(
             recipe_dir,
             platform=platform,

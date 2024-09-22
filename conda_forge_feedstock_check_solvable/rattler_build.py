@@ -3,6 +3,7 @@ import tempfile
 
 import yaml
 
+from conda_forge_feedstock_check_solvable.utils import print_debug
 from conda_forge_feedstock_check_solvable.virtual_packages import (
     virtual_package_repodata,
 )
@@ -11,7 +12,7 @@ from conda_forge_feedstock_check_solvable.virtual_packages import (
 def run_rattler_build(command):
     try:
         # Run the command and capture output
-        print("Running: ", " ".join(command))
+        print_debug("Running: ", " ".join(command))
         result = subprocess.run(
             " ".join(command), shell=True, check=False, capture_output=True, text=True
         )
@@ -57,7 +58,6 @@ def invoke_rattler_build(
         status, out, err = run_rattler_build(args)
 
         if status == 0:
-            print(out, err)
             return True, ""
         else:
             return False, out + err
