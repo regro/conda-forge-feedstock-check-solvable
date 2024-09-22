@@ -1,0 +1,7 @@
+package:
+  name: v1-unsolvable
+  version: "0.1"
+
+requirements:
+  build:
+    - python

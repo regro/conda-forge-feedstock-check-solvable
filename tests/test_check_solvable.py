@@ -590,3 +590,18 @@ def test_jolt_physics_rattler(tmp_path):
     )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
+
+
+def test_v1_unsolvable(tmp_path):
+    """test an unsolvable recipe in the new format"""
+    feedstock_dir = os.path.join(os.path.dirname(__file__), "v1-unsolvable-feedstock")
+    solvable, errors, _ = is_recipe_solvable(
+        feedstock_dir,
+        solver="rattler",
+        verbosity=VERB,
+        timeout=None,
+        fail_fast=True,
+    )
+    assert solvable is False
+
+    print(errors[0])
