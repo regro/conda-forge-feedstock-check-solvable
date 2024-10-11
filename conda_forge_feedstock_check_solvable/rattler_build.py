@@ -35,11 +35,9 @@ def invoke_rattler_build(
     # this is OK since there is an lru cache
     virtual_package_repo_url = virtual_package_repodata()
     # create a temporary file and dump the variants as YAML
-
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as variants_file:
         yaml.dump(variants, variants_file)
         variants_file.flush()
-
         channels_args = []
         for c in channels:
             channels_args.extend(["-c", c])
@@ -56,6 +54,7 @@ def invoke_rattler_build(
         )
 
         status, out, err = run_rattler_build(args)
+        out = f"Command: {' '.join(args)}\nLogs:\n{out}"
 
         if status == 0:
             return True, ""

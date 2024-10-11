@@ -40,6 +40,8 @@ class FakePackage:
             build = f"{self.build_number}"
         out["depends"] = list(out["depends"])
         out["build"] = build
+        # add an empty run exports for rattler-build
+        out["run_exports"] = {}
         fname = f"{self.name}-{self.version}-{build}.tar.bz2"
         return fname, out
 
