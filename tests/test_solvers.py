@@ -4,10 +4,14 @@ import pprint
 import pytest
 from flaky import flaky
 
-from conda_forge_feedstock_check_solvable.mamba_solver import (
-    MambaSolver,
-    mamba_solver_factory,
-)
+try:
+    from conda_forge_feedstock_check_solvable.mamba_solver import (
+        MambaSolver,
+        mamba_solver_factory,
+    )
+except Exception:
+    MambaSolver = mamba_solver_factory = None
+
 from conda_forge_feedstock_check_solvable.rattler_solver import (
     RattlerSolver,
     rattler_solver_factory,
@@ -227,6 +231,10 @@ def test_solvers_hang(solver_factory):
     assert res[0]
 
 
+@pytest.mark.skipif(
+    MambaSolver is None or mamba_solver_factory is None,
+    reason="mamba not available",
+)
 @pytest.mark.parametrize("mamba_factory", [MambaSolver, mamba_solver_factory])
 @pytest.mark.parametrize("rattler_factory", [RattlerSolver, rattler_solver_factory])
 def test_solvers_compare_output(mamba_factory, rattler_factory):
@@ -373,6 +381,10 @@ def test_solvers_compare_output(mamba_factory, rattler_factory):
         }
 
 
+@pytest.mark.skipif(
+    MambaSolver is None or mamba_solver_factory is None,
+    reason="mamba not available",
+)
 @pytest.mark.parametrize("mamba_factory", [MambaSolver, mamba_solver_factory])
 @pytest.mark.parametrize("rattler_factory", [RattlerSolver, rattler_solver_factory])
 def test_solvers_python(mamba_factory, rattler_factory):

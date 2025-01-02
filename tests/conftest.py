@@ -6,8 +6,17 @@ import pytest
 
 from conda_forge_feedstock_check_solvable.rattler_solver import rattler_solver_factory
 
+try:
+    from conda_forge_feedstock_check_solvable.mamba_solver import (
+        mamba_solver_factory,
+    )
+except Exception:
+    mamba_solver_factory = None
+
 FEEDSTOCK_DIR = os.path.join(os.path.dirname(__file__), "test_feedstock")
-ALL_SOLVERS = ["rattler", "mamba"]
+ALL_SOLVERS = ["rattler"]
+if mamba_solver_factory is not None:
+    ALL_SOLVERS.append("mamba")
 
 
 def pytest_addoption(parser):
