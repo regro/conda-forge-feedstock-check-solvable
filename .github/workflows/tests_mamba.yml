@@ -34,7 +34,7 @@ jobs:
         shell: bash -el {0}
         run: |
           conda install --yes --file=requirements.txt
-          conda install --yes --file=requirements-optional.txt
+          conda install --yes --file=requirements-mamba.txt
           conda install --yes pytest flaky pip python-build setuptools_scm>=7 setuptools>=45 toml
           pip install -e .
 
