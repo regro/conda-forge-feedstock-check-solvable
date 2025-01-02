@@ -48,10 +48,6 @@ def pytest_generate_tests(metafunc):
         factories = []
         for solver in solvers:
             if solver == "mamba":
-                from conda_forge_feedstock_check_solvable.mamba_solver import (
-                    mamba_solver_factory,
-                )
-
                 factories.append(mamba_solver_factory)
             elif solver == "rattler":
                 factories.append(rattler_solver_factory)
