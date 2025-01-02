@@ -5,7 +5,7 @@ conda
 conda-package-handling
 conda-smithy
 conda-build
-libmambapy>=2.0.5,<3.0a0
+libmambapy>=1.5.1,<2.0a0
 ruamel.yaml.jinja2
 conda-forge-metadata>=0.11.0
 wurlitzer
