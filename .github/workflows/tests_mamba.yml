@@ -33,8 +33,9 @@ jobs:
       - name: configure conda and install code
         shell: bash -el {0}
         run: |
-          mamba install --yes --file=requirements.txt
-          mamba install --yes pytest flaky pip python-build setuptools_scm>=7 setuptools>=45 toml
+          conda install --yes --file=requirements.txt
+          conda install --yes --file=requirements-mamba.txt
+          conda install --yes pytest flaky pip python-build setuptools_scm>=7 setuptools>=45 toml
           pip install -e .
 
       - name: test versions

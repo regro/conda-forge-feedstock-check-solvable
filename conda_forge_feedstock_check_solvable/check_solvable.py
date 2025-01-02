@@ -9,7 +9,6 @@ import psutil
 from ruamel.yaml import YAML
 
 import conda_forge_feedstock_check_solvable.utils
-from conda_forge_feedstock_check_solvable.mamba_solver import mamba_solver_factory
 from conda_forge_feedstock_check_solvable.rattler_build import invoke_rattler_build
 from conda_forge_feedstock_check_solvable.rattler_solver import rattler_solver_factory
 from conda_forge_feedstock_check_solvable.utils import (
@@ -106,7 +105,7 @@ def _is_recipe_solvable(
     additional_channels=(),
     build_platform=None,
     verbosity=1,
-    solver="mamba",
+    solver="rattler",
     timeout_timer=None,
     fail_fast=False,
 ) -> Tuple[bool, List[str], Dict[str, bool]]:
@@ -199,7 +198,7 @@ def _is_recipe_solvable_on_platform(
     arch,
     build_platform_arch=None,
     additional_channels=(),
-    solver_backend="mamba",
+    solver_backend="rattler",
     timeout_timer=None,
     fail_fast=False,
 ):
@@ -308,6 +307,10 @@ def _is_recipe_solvable_on_platform(
     if solver_backend == "rattler":
         solver_factory = rattler_solver_factory
     elif solver_backend == "mamba":
+        from conda_forge_feedstock_check_solvable.mamba_solver import (
+            mamba_solver_factory,
+        )
+
         solver_factory = mamba_solver_factory
     else:
         raise ValueError(f"Unknown solver backend {solver_backend}")
