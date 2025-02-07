@@ -32,6 +32,8 @@ DEFAULT_RUN_EXPORTS = {
 MAX_GLIBC_MINOR = 50
 MAX_FUTURE_VERSION = 20
 
+ARCHSPEC_X86_64_VERSIONS = ["x86_64_v1", "x86_64_v2", "x86_64_v3", "x86_64_v4"]
+
 # these characters are start requirements that do not need to be munged from
 # 1.1 to 1.1.*
 REQ_START_NOSTAR = ["!=", "==", ">", "<", ">=", "<=", "~="]

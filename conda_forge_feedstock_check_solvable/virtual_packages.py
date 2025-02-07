@@ -12,6 +12,7 @@ import rapidjson as json
 
 from conda_forge_feedstock_check_solvable.utils import (
     ALL_PLATFORMS,
+    ARCHSPEC_X86_64_VERSIONS,
     MAX_GLIBC_MINOR,
     MINIMUM_CUDA_VERS,
     MINIMUM_OSX_64_VERS,
@@ -31,10 +32,14 @@ class FakePackage:
     timestamp: int = field(
         default_factory=lambda: int(time.mktime(time.gmtime()) * 1000),
     )
+    # Give the option of overriding the build field
+    build: str | None = None
 
     def to_repodata_entry(self):
         out = self.__dict__.copy()
-        if self.build_string:
+        if self.build is not None:
+            build = f"{self.build}"
+        elif self.build_string:
             build = f"{self.build_string}_{self.build_number}"
         else:
             build = f"{self.build_number}"
@@ -128,6 +133,14 @@ def virtual_package_repodata():
 
     tmp_path = pathlib.Path(tmp_dir)
     repodata = FakeRepoData(tmp_path)
+
+    # archspec
+    for microarch in ARCHSPEC_X86_64_VERSIONS:
+        # We have to manually override "build" here to prevent "_0" from being appended
+        repodata.add_package(
+            FakePackage("__archspec", "1", build=microarch),
+            subdirs=[subdir for subdir in ALL_PLATFORMS if subdir.endswith("-64")],
+        )
 
     # glibc
     for glibc_minor in range(12, MAX_GLIBC_MINOR + 1):
