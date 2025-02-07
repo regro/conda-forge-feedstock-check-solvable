@@ -166,6 +166,18 @@ def test_solvers_nvcc_with_virtual_package(solver_factory):
 
 
 @flaky
+def test_solvers_archspec_with_virtual_package(solver_factory):
+    with suppress_output():
+        virtual_packages = virtual_package_repodata()
+        solver = solver_factory(
+            (virtual_packages, "conda-forge", "defaults"), "linux-64"
+        )
+        out = solver.solve(["pythia8 8.312"])
+    print(out)
+    assert out[0], out[1]
+
+
+@flaky
 def test_solvers_hang(solver_factory):
     with suppress_output():
         solver = solver_factory(("conda-forge", "defaults"), "osx-64")
