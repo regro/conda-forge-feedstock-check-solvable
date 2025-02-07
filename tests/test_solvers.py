@@ -180,7 +180,6 @@ def test_solvers_archspec_with_virtual_package(solver_factory):
             (virtual_packages, "conda-forge", "defaults"), "linux-64"
         )
         out = solver.solve(["pythia8 8.312"])
-    print(out)
     assert out[0], out[1]
 
 
