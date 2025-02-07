@@ -7,7 +7,16 @@ import textwrap
 from functools import lru_cache
 from typing import List
 
-from rattler import Channel, MatchSpec, Platform, RepoDataRecord, solve
+from rattler import (
+    Channel,
+    GenericVirtualPackage,
+    MatchSpec,
+    PackageName,
+    Platform,
+    RepoDataRecord,
+    Version,
+    solve,
+)
 
 from conda_forge_feedstock_check_solvable.utils import (
     DEFAULT_RUN_EXPORTS,
@@ -46,8 +55,17 @@ class RattlerSolver:
             else:
                 _channels.append(c)
         self._channels = [Channel(c) for c in _channels]
-        self.platform_arch = platform_arch
-        self._platforms = [Platform(self.platform_arch), Platform("noarch")]
+        self.platform_arch = Platform(platform_arch)
+        self._platforms = [self.platform_arch, Platform("noarch")]
+
+        self._virtual_packages = []
+        if str(self.platform_arch.arch) == "x86_64":
+            # Default to a modern x86_64 architecture to avoid erroneous solver failures
+            self._virtual_packages.append(
+                GenericVirtualPackage(
+                    PackageName("__archspec"), Version("1"), "x86_64_v3"
+                )
+            )
 
     def solve(
         self,
@@ -118,6 +136,7 @@ class RattlerSolver:
                     platforms=self._platforms,
                     timeout=timeout,
                     constraints=_constraints,
+                    virtual_packages=self._virtual_packages,
                 )
             )
             success = True
