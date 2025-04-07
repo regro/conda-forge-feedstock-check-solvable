@@ -200,6 +200,21 @@ def test_biopython_solvable_runs(solver):
     )
 
 
+@flaky
+def test_guiqwt_solvable(tmp_path, solver):
+    """test for run exports as a single string in pyqt"""
+    feedstock_dir = os.path.join(os.path.dirname(__file__), "guiqwt-feedstock")
+    solvable, errors, solvable_by_variant = is_recipe_solvable(
+        feedstock_dir,
+        solver=solver,
+        verbosity=VERB,
+        timeout=None,
+        fail_fast=True,
+    )
+    pprint.pprint(solvable_by_variant)
+    assert solvable, pprint.pformat(errors)
+
+
 def clone_and_checkout_repo(base_path: pathlib.Path, origin_url: str, ref: str):
     subprocess.run(
         f"cd {base_path} && git clone {origin_url} repo",
@@ -213,25 +228,6 @@ def test_arrow_solvable(tmp_path, solver):
     feedstock_dir = clone_and_checkout_repo(
         tmp_path,
         "https://github.com/conda-forge/arrow-cpp-feedstock",
-        ref="main",
-    )
-    solvable, errors, solvable_by_variant = is_recipe_solvable(
-        feedstock_dir,
-        solver=solver,
-        verbosity=VERB,
-        timeout=None,
-        fail_fast=True,
-    )
-    pprint.pprint(solvable_by_variant)
-    assert solvable, pprint.pformat(errors)
-
-
-@flaky
-def test_guiqwt_solvable(tmp_path, solver):
-    """test for run exports as a single string in pyqt"""
-    feedstock_dir = clone_and_checkout_repo(
-        tmp_path,
-        "https://github.com/conda-forge/guiqwt-feedstock",
         ref="main",
     )
     solvable, errors, solvable_by_variant = is_recipe_solvable(
