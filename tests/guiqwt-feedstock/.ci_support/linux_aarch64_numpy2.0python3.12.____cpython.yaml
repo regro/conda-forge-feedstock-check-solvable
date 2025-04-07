@@ -28,10 +28,10 @@ pin_run_as_build:
   python:
     min_pin: x.x
     max_pin: x.x
+pyqt:
+- '5.15'
 python:
 - 3.12.* *_cpython
-python_impl:
-- cpython
 target_platform:
 - linux-aarch64
 zip_keys:
@@ -41,4 +41,3 @@ zip_keys:
   - cdt_name
 - - python
   - numpy
-  - python_impl
