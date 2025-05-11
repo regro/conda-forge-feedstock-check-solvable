@@ -12,7 +12,7 @@ from conda_forge_feedstock_check_solvable.virtual_packages import (
 def run_rattler_build(command):
     try:
         # Run the command and capture output
-        print_debug("Running: ", " ".join(command))
+        print_debug("Running: %s", " ".join(command))
         result = subprocess.run(
             " ".join(command), shell=True, check=False, capture_output=True, text=True
         )
@@ -36,10 +36,15 @@ def invoke_rattler_build(
     virtual_package_repo_url = virtual_package_repodata()
     # create a temporary file and dump the variants as YAML
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as variants_file:
-        yaml.dump(variants, variants_file)
+        channel_sources = variants.get("channel_sources", [])
+        yaml.dump(
+            {k: v for k, v in variants.items() if k != "channel_sources"},
+            variants_file,
+        )
         variants_file.flush()
+
         channels_args = []
-        for c in channels:
+        for c in channels + channel_sources:
             channels_args.extend(["-c", c])
 
         channels_args.extend(["-c", virtual_package_repo_url])

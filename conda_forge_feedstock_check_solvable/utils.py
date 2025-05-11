@@ -101,10 +101,10 @@ VERBOSITY_PREFIX = {
 }
 
 
-def print_verb(fmt, *args, verbosity=0):
-    from inspect import currentframe, getframeinfo
+def print_verb(fmt, *args, verbosity=0, stack_bump=1):
+    from inspect import stack
 
-    frameinfo = getframeinfo(currentframe())
+    frameinfo = stack()[stack_bump]
 
     if verbosity <= VERBOSITY:
         if args:
@@ -114,7 +114,7 @@ def print_verb(fmt, *args, verbosity=0):
         print(
             VERBOSITY_PREFIX[verbosity]
             + ":"
-            + __name__
+            + frameinfo.frame.f_globals["__name__"]
             + ":"
             + "%d" % frameinfo.lineno
             + ":"
@@ -124,19 +124,19 @@ def print_verb(fmt, *args, verbosity=0):
 
 
 def print_critical(fmt, *args):
-    print_verb(fmt, *args, verbosity=0)
+    print_verb(fmt, *args, verbosity=0, stack_bump=2)
 
 
 def print_warning(fmt, *args):
-    print_verb(fmt, *args, verbosity=1)
+    print_verb(fmt, *args, verbosity=1, stack_bump=2)
 
 
 def print_info(fmt, *args):
-    print_verb(fmt, *args, verbosity=2)
+    print_verb(fmt, *args, verbosity=2, stack_bump=2)
 
 
 def print_debug(fmt, *args):
-    print_verb(fmt, *args, verbosity=3)
+    print_verb(fmt, *args, verbosity=3, stack_bump=2)
 
 
 @contextlib.contextmanager
