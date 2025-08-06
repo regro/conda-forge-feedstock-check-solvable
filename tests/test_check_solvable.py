@@ -17,6 +17,14 @@ FEEDSTOCK_DIR = os.path.join(os.path.dirname(__file__), "test_feedstock")
 VERB = 1
 
 
+def clone_and_checkout_repo(base_path: pathlib.Path, origin_url: str, ref: str):
+    subprocess.run(
+        f"cd {base_path} && git clone {origin_url} repo",
+        shell=True,
+    )
+    return str(base_path / "repo")
+
+
 @flaky
 def test_is_recipe_solvable_ok(feedstock_dir, solver):
     recipe_file = os.path.join(feedstock_dir, "recipe", "meta.yaml")
@@ -150,8 +158,13 @@ def test_r_base_cross_solvable(solver):
 
 
 @flaky
-def test_xgboost_solvable(solver):
-    feedstock_dir = os.path.join(os.path.dirname(__file__), "xgboost-feedstock")
+def test_xgboost_solvable(tmp_path, solver):
+    feedstock_dir = clone_and_checkout_repo(
+        tmp_path,
+        "https://github.com/conda-forge/arrow-cpp-feedstock",
+        ref="main",
+    )
+
     solvable, errors, _ = is_recipe_solvable(
         feedstock_dir,
         solver=solver,
@@ -213,14 +226,6 @@ def test_guiqwt_solvable(tmp_path, solver):
     )
     pprint.pprint(solvable_by_variant)
     assert solvable, pprint.pformat(errors)
-
-
-def clone_and_checkout_repo(base_path: pathlib.Path, origin_url: str, ref: str):
-    subprocess.run(
-        f"cd {base_path} && git clone {origin_url} repo",
-        shell=True,
-    )
-    return str(base_path / "repo")
 
 
 @flaky

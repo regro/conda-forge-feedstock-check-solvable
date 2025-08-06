@@ -91,7 +91,7 @@ python:
             config=config,
         )
 
-        solver = solver_factory(("conda-forge", "defaults"), "linux-64")
+        solver = solver_factory(("conda-forge",), "linux-64")
 
         metas = conda_build.api.render(
             str(tmp_path),
@@ -102,7 +102,7 @@ python:
             permit_undefined_jinja=True,
             finalize=False,
             bypass_env_check=True,
-            channel_urls=("conda-forge", "defaults"),
+            channel_urls=("conda-forge",),
         )
 
     m = metas[0][0]
@@ -155,9 +155,7 @@ def test_solvers_constraints_unsolvable(solver_factory):
 def test_solvers_nvcc_with_virtual_package(solver_factory):
     with suppress_output():
         virtual_packages = virtual_package_repodata()
-        solver = solver_factory(
-            (virtual_packages, "conda-forge", "defaults"), "linux-64"
-        )
+        solver = solver_factory((virtual_packages, "conda-forge"), "linux-64")
         out = solver.solve(
             ["gcc_linux-64 7.*", "gxx_linux-64 7.*", "nvcc_linux-64 11.0.*"]
         )
@@ -171,14 +169,12 @@ def test_solvers_archspec_with_virtual_package(solver_factory):
         virtual_packages = virtual_package_repodata()
 
         # Not having the fake virtual packages should fail
-        solver = solver_factory(("conda-forge", "defaults"), "linux-64")
+        solver = solver_factory(("conda-forge",), "linux-64")
         out = solver.solve(["pythia8 8.312"])
         assert not out[0], out[1]
 
         # Including the fake virtual packages should succeed
-        solver = solver_factory(
-            (virtual_packages, "conda-forge", "defaults"), "linux-64"
-        )
+        solver = solver_factory((virtual_packages, "conda-forge"), "linux-64")
         out = solver.solve(["pythia8 8.312"])
     assert out[0], out[1]
 
@@ -186,7 +182,7 @@ def test_solvers_archspec_with_virtual_package(solver_factory):
 @flaky
 def test_solvers_hang(solver_factory):
     with suppress_output():
-        solver = solver_factory(("conda-forge", "defaults"), "osx-64")
+        solver = solver_factory(("conda-forge",), "osx-64")
         res = solver.solve(
             [
                 "pytest",
@@ -222,7 +218,7 @@ def test_solvers_hang(solver_factory):
     assert res[0]
 
     with suppress_output():
-        solver = solver_factory(("conda-forge", "defaults"), "linux-64")
+        solver = solver_factory(("conda-forge",), "linux-64")
         res = solver.solve(
             [
                 "gdal >=2.1.0",
@@ -406,7 +402,7 @@ def test_solvers_compare_output(mamba_factory, rattler_factory):
 @pytest.mark.parametrize("mamba_factory", [MambaSolver, mamba_solver_factory])
 @pytest.mark.parametrize("rattler_factory", [RattlerSolver, rattler_solver_factory])
 def test_solvers_python(mamba_factory, rattler_factory):
-    channels = (virtual_package_repodata(), "conda-forge", "defaults", "msys2")
+    channels = (virtual_package_repodata(), "conda-forge", "msys2")
     platform = "linux-64"
     for _ in range(4):
         mamba_solver = mamba_factory(channels, platform)
