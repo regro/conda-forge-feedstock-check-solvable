@@ -37,17 +37,24 @@ def invoke_rattler_build(
     # create a temporary file and dump the variants as YAML
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as variants_file:
         channel_sources = variants.get("channel_sources", [])
+        # Add virtual package repo URL to channel sources
+        if channel_sources:
+            variants["channel_sources"] = [
+                source + f",{virtual_package_repo_url}" for source in channel_sources
+            ]
+
         yaml.dump(
-            {k: v for k, v in variants.items() if k != "channel_sources"},
+            {k: v for k, v in variants.items()},
             variants_file,
         )
         variants_file.flush()
 
         channels_args = []
-        for c in channels + channel_sources:
-            channels_args.extend(["-c", c])
+        if not channel_sources:
+            for c in channels:
+                channels_args.extend(["-c", c])
 
-        channels_args.extend(["-c", virtual_package_repo_url])
+            channels_args.extend(["-c", virtual_package_repo_url])
 
         args = (
             ["rattler-build", "build", "--recipe", recipe_dir]
