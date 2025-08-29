@@ -1,5 +1,7 @@
+import os
 import subprocess
 import tempfile
+import uuid
 
 import yaml
 
@@ -33,19 +35,24 @@ def invoke_rattler_build(
     # this is OK since there is an lru cache
     virtual_package_repo_url = virtual_package_repodata()
     # create a temporary file and dump the variants as YAML
-    with tempfile.NamedTemporaryFile(mode="w", delete_on_close=False) as variants_file:
-        channel_sources = variants.get("channel_sources", [])
-        # Add virtual package repo URL to channel sources
-        if channel_sources:
-            variants["channel_sources"] = [
-                source + f",{virtual_package_repo_url}" for source in channel_sources
-            ]
-
-        yaml.dump(
-            {k: v for k, v in variants.items()},
-            variants_file,
+    with tempfile.TemporaryDirectory() as tmpdir:
+        variants_file_name = os.path.join(
+            tmpdir,
+            str(uuid.uuid4()) + ".yaml"
         )
-        variants_file.flush()
+        with open(variants_file_name, "w") as fp:
+            channel_sources = variants.get("channel_sources", [])
+            # Add virtual package repo URL to channel sources
+            if channel_sources:
+                variants["channel_sources"] = [
+                    source + f",{virtual_package_repo_url}"
+                    for source in channel_sources
+                ]
+
+            yaml.dump(
+                {k: v for k, v in variants.items()},
+                fp,
+            )
 
         channels_args = []
         if not channel_sources:
@@ -59,7 +66,7 @@ def invoke_rattler_build(
             + channels_args
             + ["--target-platform", host_platform]
             + ["--build-platform", build_platform]
-            + ["-m", variants_file.name]
+            + ["-m", variants_file_name]
             + ["--render-only", "--with-solve"]
         )
 
