@@ -14,7 +14,7 @@ def run_rattler_build(command):
         # Run the command and capture output
         print_debug("Running: %s", " ".join(command))
         result = subprocess.run(
-            " ".join(command), shell=True, check=False, capture_output=True, text=True
+            command, check=False, capture_output=True, text=True
         )
 
         # Get the status code
