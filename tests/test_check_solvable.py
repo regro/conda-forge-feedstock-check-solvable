@@ -305,7 +305,7 @@ def test_dftbplus_solvable(tmp_path, solver):
 
 @pytest.mark.xfail
 def test_cupy_solvable_at_commit(tmp_path, solver):
-    """cupy at a specific commit - old test so fails not"""
+    """cupy at a specific commit - old test so fails"""
     feedstock_dir = clone_and_checkout_repo(
         tmp_path,
         "https://github.com/conda-forge/cupy-feedstock",
