@@ -697,3 +697,16 @@ def replace_pin_compatible(reqs, host_reqs, strict=False):
             new_reqs.append(req)
 
     return new_reqs
+
+
+def clean_rattler_cache():
+    subprocess.run(
+        [
+            "pixi",
+            "clean",
+            "cache",
+            "--yes",
+        ],
+        check=False,
+        capture_output=True,
+    )

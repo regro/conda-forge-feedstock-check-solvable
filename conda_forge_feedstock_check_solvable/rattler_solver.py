@@ -1,4 +1,5 @@
 import asyncio
+import atexit
 import copy
 import datetime
 import os
@@ -11,11 +12,14 @@ from rattler import Channel, MatchSpec, Platform, RepoDataRecord, solve
 
 from conda_forge_feedstock_check_solvable.utils import (
     DEFAULT_RUN_EXPORTS,
+    clean_rattler_cache,
     convert_spec_to_conda_build,
     get_run_exports,
     print_debug,
     print_warning,
 )
+
+atexit.register(clean_rattler_cache)
 
 
 class RattlerSolver:
@@ -171,7 +175,7 @@ class RattlerSolver:
         We only look up export data for things explicitly listed in the original
         specs.
         """
-        names = {s.name for s in _specs}
+        names = {s.name.as_package_name() for s in _specs}
         ign_rex_from = {s.name for s in ignore_run_exports_from}
         ign_rex = {s.name for s in ignore_run_exports}
         run_exports = copy.deepcopy(DEFAULT_RUN_EXPORTS)

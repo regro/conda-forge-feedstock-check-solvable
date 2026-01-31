@@ -353,6 +353,8 @@ def _is_recipe_solvable_on_platform(
             )
             timeout_timer.raise_for_timeout()
 
+            print_debug("build run exports::\n\n%s\n" % pprint.pformat(build_rx))
+
             solvable = solvable and _solvable
             if _err is not None:
                 errors.append(_err)
@@ -393,6 +395,8 @@ def _is_recipe_solvable_on_platform(
                 else None,
             )
             timeout_timer.raise_for_timeout()
+
+            print_debug("host run exports::\n\n%s\n" % pprint.pformat(host_rx))
 
             solvable = solvable and _solvable
             if _err is not None:

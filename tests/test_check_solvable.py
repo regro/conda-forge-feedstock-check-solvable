@@ -161,7 +161,7 @@ def test_r_base_cross_solvable(solver):
 def test_xgboost_solvable(tmp_path, solver):
     feedstock_dir = clone_and_checkout_repo(
         tmp_path,
-        "https://github.com/conda-forge/arrow-cpp-feedstock",
+        "https://github.com/conda-forge/xgboost-feedstock",
         ref="main",
     )
 

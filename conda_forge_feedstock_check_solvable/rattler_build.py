@@ -1,3 +1,4 @@
+import atexit
 import os
 import subprocess
 import tempfile
@@ -5,10 +6,12 @@ import uuid
 
 import yaml
 
-from conda_forge_feedstock_check_solvable.utils import print_debug
+from conda_forge_feedstock_check_solvable.utils import clean_rattler_cache, print_debug
 from conda_forge_feedstock_check_solvable.virtual_packages import (
     virtual_package_repodata,
 )
+
+atexit.register(clean_rattler_cache)
 
 
 def run_rattler_build(command):
@@ -27,20 +30,6 @@ def run_rattler_build(command):
         return status_code, stdout, stderr
     except Exception as e:
         return -1, "", str(e)
-    finally:
-        try:
-            subprocess.run(
-                [
-                    "pixi",
-                    "clean",
-                    "cache",
-                    "--yes",
-                ],
-                check=False,
-                capture_output=True,
-            )
-        except Exception as e:
-            print_debug("pixi clean cache command failed: %r", e)
 
 
 def invoke_rattler_build(
