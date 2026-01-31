@@ -303,9 +303,9 @@ def test_dftbplus_solvable(tmp_path, solver):
     assert solvable, pprint.pformat(errors)
 
 
-@flaky
-def test_cupy_solvable(tmp_path, solver):
-    """grpcio has a runtime dep on openssl which has strange pinning things in it"""
+@pytest.mark.xfail
+def test_cupy_solvable_at_commit(tmp_path, solver):
+    """cupy at a specific commit - old test so fails not"""
     feedstock_dir = clone_and_checkout_repo(
         tmp_path,
         "https://github.com/conda-forge/cupy-feedstock",
@@ -315,6 +315,23 @@ def test_cupy_solvable(tmp_path, solver):
         f"cd {feedstock_dir} && git checkout 72d6c5808ca79c9cd9a3eb4064a72586c73c3430",
         shell=True,
         check=True,
+    )
+    solvable, errors, solvable_by_variant = is_recipe_solvable(
+        feedstock_dir,
+        solver=solver,
+        verbosity=VERB,
+        timeout=None,
+        fail_fast=True,
+    )
+    pprint.pprint(solvable_by_variant)
+    assert solvable, pprint.pformat(errors)
+
+
+def test_cupy_solvable(tmp_path, solver):
+    feedstock_dir = clone_and_checkout_repo(
+        tmp_path,
+        "https://github.com/conda-forge/cupy-feedstock",
+        ref="main",
     )
     solvable, errors, solvable_by_variant = is_recipe_solvable(
         feedstock_dir,
